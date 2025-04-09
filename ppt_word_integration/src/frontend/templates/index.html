@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerPoint Speaker Notes Enhancer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="static/css/styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <img src="static/images/logo.svg" alt="PowerPoint Speaker Notes Enhancer Logo">
+                <h1>PowerPoint Speaker Notes Enhancer</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#" class="active">Home</a></li>
+                    <li><a href="#how-it-works">How It Works</a></li>
+                    <li><a href="#help">Help</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <div class="hero-content">
+                    <h2>Transform Your Presentations with Professional Speaker Notes and Audio</h2>
+                    <p>Upload your PowerPoint and Word files to automatically add speaker notes and generate realistic human voice narration for each slide.</p>
+                    <button id="get-started-btn" class="btn btn-primary">Get Started</button>
+                </div>
+                <div class="hero-image">
+                    <img src="static/images/hero-image.svg" alt="Presentation Enhancement Illustration">
+                </div>
+            </div>
+        </section>
+
+        <section id="upload-section" class="upload-section">
+            <div class="container">
+                <h2>Upload Your Files</h2>
+                <p>Select your PowerPoint presentation and Word document with speaker notes.</p>
+                
+                <div class="upload-container">
+                    <form id="upload-form">
+                        <div class="upload-boxes">
+                            <div class="upload-box" id="ppt-upload-box">
+                                <div class="upload-icon">
+                                    <img src="static/images/ppt-icon.svg" alt="PowerPoint Icon">
+                                </div>
+                                <h3>PowerPoint Presentation</h3>
+                                <p>Drag & drop your .ppt or .pptx file here</p>
+                                <input type="file" id="ppt-file" name="ppt_file" accept=".ppt,.pptx" hidden>
+                                <button type="button" class="btn btn-secondary" id="ppt-browse-btn">Browse Files</button>
+                                <div class="file-info" id="ppt-file-info"></div>
+                            </div>
+                            
+                            <div class="upload-box" id="word-upload-box">
+                                <div class="upload-icon">
+                                    <img src="static/images/word-icon.svg" alt="Word Icon">
+                                </div>
+                                <h3>Word Document</h3>
+                                <p>Drag & drop your .doc or .docx file here</p>
+                                <input type="file" id="word-file" name="word_file" accept=".doc,.docx" hidden>
+                                <button type="button" class="btn btn-secondary" id="word-browse-btn">Browse Files</button>
+                                <div class="file-info" id="word-file-info"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="options-container">
+                            <h3>Voice Options</h3>
+                            <div class="option-group">
+                                <label for="voice-type">Voice Type:</label>
+                                <select id="voice-type" name="voice_type">
+                                    <option value="middle-aged-american-male" selected>Middle-aged American Male (Default)</option>
+                                    <option value="young-american-female">Young American Female</option>
+                                    <option value="senior-british-male">Senior British Male</option>
+                                </select>
+                            </div>
+                            
+                            <div class="option-group">
+                                <label for="tts-service">Text-to-Speech Service:</label>
+                                <select id="tts-service" name="tts_service">
+                                    <option value="google" selected>Google Cloud Text-to-Speech</option>
+                                    <option value="amazon">Amazon Polly</option>
+                                    <option value="azure">Microsoft Azure Speech Service</option>
+                                    <option value="elevenlabs">ElevenLabs</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="submit-container">
+                            <button type="submit" class="btn btn-primary" id="process-btn" disabled>Process Files</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+        
+        <section id="processing-section" class="processing-section hidden">
+            <div class="container">
+                <h2>Processing Your Files</h2>
+                <p>Please wait while we enhance your presentation.</p>
+                
+                <div class="progress-container">
+                    <div class="progress-steps">
+                        <div class="progress-step active" id="step-uploading">
+                            <div class="step-icon">1</div>
+                            <div class="step-label">Uploading Files</div>
+                        </div>
+                        <div class="progress-step" id="step-extracting">
+                            <div class="step-icon">2</div>
+                            <div class="step-label">Extracting Notes</div>
+                        </div>
+                        <div class="progress-step" id="step-converting">
+                            <div class="step-icon">3</div>
+                            <div class="step-label">Converting to Speech</div>
+                        </div>
+                        <div class="progress-step" id="step-finalizing">
+                            <div class="step-icon">4</div>
+                            <div class="step-label">Finalizing Presentation</div>
+                        </div>
+                    </div>
+                    
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                    
+                    <div class="status-message" id="status-message">Uploading your files...</div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="result-section" class="result-section hidden">
+            <div class="container">
+                <h2>Your Enhanced Presentation is Ready!</h2>
+                <p>Your PowerPoint presentation has been successfully enhanced with speaker notes and audio narration.</p>
+                
+                <div class="result-container">
+                    <div class="result-summary">
+                        <div class="summary-item">
+                            <div class="summary-icon">
+                                <img src="static/images/slides-icon.svg" alt="Slides Icon">
+                            </div>
+                            <div class="summary-text">
+                                <h4>Total Slides</h4>
+                                <p id="total-slides">0</p>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <div class="summary-icon">
+                                <img src="static/images/notes-icon.svg" alt="Notes Icon">
+                            </div>
+                            <div class="summary-text">
+                                <h4>Notes Added</h4>
+                                <p id="notes-added">0</p>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <div class="summary-icon">
+                                <img src="static/images/audio-icon.svg" alt="Audio Icon">
+                            </div>
+                            <div class="summary-text">
+                                <h4>Audio Files</h4>
+                                <p id="audio-files">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="download-container">
+                        <button class="btn btn-primary" id="download-btn">Download Enhanced Presentation</button>
+                        <p class="download-info">Your file will be available for download for the next 24 hours.</p>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button class="btn btn-secondary" id="new-process-btn">Process Another Presentation</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="how-it-works" class="how-it-works-section">
+            <div class="container">
+                <h2>How It Works</h2>
+                
+                <div class="steps-container">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Upload Your Files</h3>
+                            <p>Upload your PowerPoint presentation and Word document containing speaker notes labeled as "Slide 1", "Slide 2", etc.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Extract and Insert Notes</h3>
+                            <p>Our system extracts the speaker notes from your Word document and inserts them into the appropriate slides in your PowerPoint presentation.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Convert to Speech</h3>
+                            <p>The speaker notes are converted to realistic human voice audio using advanced text-to-speech technology.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h3>Enhance Your Presentation</h3>
+                            <p>The audio files are attached to each slide and set to play automatically when the slide appears during your presentation.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="help" class="help-section">
+            <div class="container">
+                <h2>Help & FAQ</h2>
+                
+                <div class="faq-container">
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>What file formats are supported?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>We support PowerPoint files (.ppt and .pptx) and Word documents (.doc and .docx).</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>How should I format my Word document?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Your Word document should have speaker notes clearly labeled with "Slide 1", "Slide 2", etc. Each slide's notes should follow its label until the next slide label.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>What voice options are available?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>We offer several voice options, including our default middle-aged American male with an engaging disposition. You can select different voices from the dropdown menu during processing.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>Is there a file size limit?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Yes, the maximum file size is 50MB for each file (PowerPoint and Word).</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>How long does processing take?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Processing time depends on the size of your files and the number of slides. Typically, it takes 1-3 minutes for a standard presentation.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <img src="static/images/logo-small.svg" alt="PowerPoint Speaker Notes Enhancer Logo">
+                    <p>PowerPoint Speaker Notes Enhancer</p>
+                </div>
+                
+                <div class="footer-links">
+                    <div class="link-group">
+                        <h4>Navigation</h4>
+                        <ul>
+                            <li><a href="#">Home</a></li>
+                            <li><a href="#how-it-works">How It Works</a></li>
+                            <li><a href="#help">Help</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="link-group">
+                        <h4>Legal</h4>
+                        <ul>
+                            <li><a href="#">Terms of Service</a></li>
+                            <li><a href="#">Privacy Policy</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="link-group">
+                        <h4>Contact</h4>
+                        <ul>
+                            <li><a href="mailto:support@example.com">support@example.com</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2025 PowerPoint Speaker Notes Enhancer. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="static/js/main.js"></script>
+</body>
+</html>

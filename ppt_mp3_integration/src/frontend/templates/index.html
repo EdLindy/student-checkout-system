@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerPoint Audio Enhancer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="static/css/styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <img src="static/images/logo.svg" alt="PowerPoint Audio Enhancer Logo">
+                <h1>PowerPoint Audio Enhancer</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="#" class="active">Home</a></li>
+                    <li><a href="#how-it-works">How It Works</a></li>
+                    <li><a href="#help">Help</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <div class="hero-content">
+                    <h2>Transform Your Presentations with Audio Speaker Notes</h2>
+                    <p>Upload your PowerPoint and MP3 files to automatically add audio segments and transcribed speaker notes for each slide.</p>
+                    <button id="get-started-btn" class="btn btn-primary">Get Started</button>
+                </div>
+                <div class="hero-image">
+                    <img src="static/images/hero-image.svg" alt="Presentation Enhancement Illustration">
+                </div>
+            </div>
+        </section>
+
+        <section id="upload-section" class="upload-section">
+            <div class="container">
+                <h2>Upload Your Files</h2>
+                <p>Select your PowerPoint presentation and MP3 file with speaker notes.</p>
+                
+                <div class="upload-container">
+                    <form id="upload-form">
+                        <div class="upload-boxes">
+                            <div class="upload-box" id="ppt-upload-box">
+                                <div class="upload-icon">
+                                    <img src="static/images/ppt-icon.svg" alt="PowerPoint Icon">
+                                </div>
+                                <h3>PowerPoint Presentation</h3>
+                                <p>Drag & drop your .ppt or .pptx file here</p>
+                                <input type="file" id="ppt-file" name="ppt_file" accept=".ppt,.pptx" hidden>
+                                <button type="button" class="btn btn-secondary" id="ppt-browse-btn">Browse Files</button>
+                                <div class="file-info" id="ppt-file-info"></div>
+                            </div>
+                            
+                            <div class="upload-box" id="mp3-upload-box">
+                                <div class="upload-icon">
+                                    <img src="static/images/audio-icon.svg" alt="Audio Icon">
+                                </div>
+                                <h3>MP3 Audio File</h3>
+                                <p>Drag & drop your .mp3 file with slide markers here</p>
+                                <input type="file" id="mp3-file" name="mp3_file" accept=".mp3" hidden>
+                                <button type="button" class="btn btn-secondary" id="mp3-browse-btn">Browse Files</button>
+                                <div class="file-info" id="mp3-file-info"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="options-container">
+                            <h3>Transcription Options</h3>
+                            <div class="option-group">
+                                <label for="transcription-service">Transcription Service:</label>
+                                <select id="transcription-service" name="transcription_service">
+                                    <option value="google" selected>Google Cloud Speech-to-Text</option>
+                                    <option value="amazon">Amazon Transcribe</option>
+                                    <option value="azure">Microsoft Azure Speech Service</option>
+                                    <option value="whisper">OpenAI Whisper</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="submit-container">
+                            <button type="submit" class="btn btn-primary" id="process-btn" disabled>Process Files</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+        
+        <section id="audio-processing-section" class="audio-processing-section hidden">
+            <div class="container">
+                <h2>Audio Processing</h2>
+                <p>We're analyzing your audio file to detect slide markers.</p>
+                
+                <div class="audio-container">
+                    <div class="waveform-container">
+                        <div id="waveform"></div>
+                        <div class="playback-controls">
+                            <button id="play-btn" class="btn btn-circle"><i class="icon-play"></i></button>
+                            <button id="pause-btn" class="btn btn-circle"><i class="icon-pause"></i></button>
+                            <button id="stop-btn" class="btn btn-circle"><i class="icon-stop"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div class="markers-container">
+                        <h3>Detected Slide Markers</h3>
+                        <div id="markers-list" class="markers-list">
+                            <p class="loading-text">Detecting markers...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button class="btn btn-secondary" id="back-to-upload-btn">Back</button>
+                        <button class="btn btn-primary" id="continue-to-transcription-btn" disabled>Continue to Transcription</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="transcription-section" class="transcription-section hidden">
+            <div class="container">
+                <h2>Transcription Review</h2>
+                <p>Review and edit the transcriptions for each slide.</p>
+                
+                <div class="transcription-container">
+                    <div class="slides-list">
+                        <h3>Slides</h3>
+                        <ul id="slides-nav"></ul>
+                    </div>
+                    
+                    <div class="transcription-editor">
+                        <div class="editor-header">
+                            <h3 id="current-slide-title">Slide 1</h3>
+                            <div class="audio-player">
+                                <audio id="segment-player" controls></audio>
+                            </div>
+                        </div>
+                        
+                        <div class="editor-content">
+                            <textarea id="transcription-text" placeholder="Transcription will appear here..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button class="btn btn-secondary" id="back-to-audio-btn">Back</button>
+                        <button class="btn btn-primary" id="continue-to-processing-btn">Continue to Processing</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="processing-section" class="processing-section hidden">
+            <div class="container">
+                <h2>Processing Your Files</h2>
+                <p>Please wait while we enhance your presentation.</p>
+                
+                <div class="progress-container">
+                    <div class="progress-steps">
+                        <div class="progress-step active" id="step-uploading">
+                            <div class="step-icon">1</div>
+                            <div class="step-label">Uploading Files</div>
+                        </div>
+                        <div class="progress-step" id="step-segmenting">
+                            <div class="step-icon">2</div>
+                            <div class="step-label">Segmenting Audio</div>
+                        </div>
+                        <div class="progress-step" id="step-transcribing">
+                            <div class="step-icon">3</div>
+                            <div class="step-label">Transcribing Audio</div>
+                        </div>
+                        <div class="progress-step" id="step-integrating">
+                            <div class="step-icon">4</div>
+                            <div class="step-label">Integrating with PowerPoint</div>
+                        </div>
+                    </div>
+                    
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                    
+                    <div class="status-message" id="status-message">Uploading your files...</div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="result-section" class="result-section hidden">
+            <div class="container">
+                <h2>Your Enhanced Presentation is Ready!</h2>
+                <p>Your PowerPoint presentation has been successfully enhanced with audio segments and transcribed speaker notes.</p>
+                
+                <div class="result-container">
+                    <div class="result-summary">
+                        <div class="summary-item">
+                            <div class="summary-icon">
+                                <img src="static/images/slides-icon.svg" alt="Slides Icon">
+                            </div>
+                            <div class="summary-text">
+                                <h4>Total Slides</h4>
+                                <p id="total-slides">0</p>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <div class="summary-icon">
+                                <img src="static/images/audio-icon.svg" alt="Audio Icon">
+                            </div>
+                            <div class="summary-text">
+                                <h4>Audio Segments</h4>
+                                <p id="audio-segments">0</p>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-item">
+                            <div class="summary-icon">
+                                <img src="static/images/notes-icon.svg" alt="Notes Icon">
+                            </div>
+                            <div class="summary-text">
+                                <h4>Speaker Notes</h4>
+                                <p id="speaker-notes">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="download-container">
+                        <button class="btn btn-primary" id="download-btn">Download Enhanced Presentation</button>
+                        <p class="download-info">Your file will be available for download for the next 24 hours.</p>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button class="btn btn-secondary" id="new-process-btn">Process Another Presentation</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="how-it-works" class="how-it-works-section">
+            <div class="container">
+                <h2>How It Works</h2>
+                
+                <div class="steps-container">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Upload Your Files</h3>
+                            <p>Upload your PowerPoint presentation and MP3 file containing audio with verbal markers like "Slide 1", "Slide 2", etc.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Audio Segmentation</h3>
+                            <p>Our system detects the slide markers in your audio and segments it into individual clips for each slide.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Transcription</h3>
+                            <p>The audio segments are transcribed into text using advanced speech recognition technology.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h3>Enhance Your Presentation</h3>
+                            <p>The audio segments are attached to each slide and set to play automatically, while the transcribed text is added to the speaker notes section.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="help" class="help-section">
+            <div class="container">
+                <h2>Help & FAQ</h2>
+                
+                <div class="faq-container">
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>What file formats are supported?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>We support PowerPoint files (.ppt and .pptx) and MP3 audio files.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>How should I format my audio file?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Your audio file should be a continuous recording with clear verbal markers like "Slide 1" followed by the content for that slide, then "Slide 2" and so on. The application will detect these markers and segment the audio accordingly.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>Which transcription service should I choose?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>We offer several transcription services. Google Cloud Speech-to-Text is a good all-around choice. For specialized vocabulary or technical content, you might find Azure or Whisper more accurate.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>Is there a file size limit?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Yes, the maximum file size is 100MB for each file (PowerPoint and MP3).</p>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-item">
+                        <div class="faq-question">
+                            <h3>How long does processing take?</h3>
+                            <div class="faq-toggle">+</div>
+                        </div>
+                        <div class="faq-answer">
+                            <p>Processing time depends on the size of your files and the number of slides. Typically, it takes 2-5 minutes for a standard presentation with 10-20 slides.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <img src="static/images/logo-small.svg" alt="PowerPoint Audio Enhancer Logo">
+                    <p>PowerPoint Audio Enhancer</p>
+                </div>
+                
+                <div class="footer-links">
+                    <div class="link-group">
+                        <h4>Navigation</h4>
+                        <ul>
+                            <li><a href="#">Home</a></li>
+                            <li><a href="#how-it-works">How It Works</a></li>
+                            <li><a href="#help">Help</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="link-group">
+                        <h4>Legal</h4>
+                        <ul>
+                            <li><a href="#">Terms of Service</a></li>
+                            <li><a href="#">Privacy Policy</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="link-group">
+                        <h4>Contact</h4>
+                        <ul>
+                            <li><a href="mailto:support@example.com">support@example.com</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2025 PowerPoint Audio Enhancer. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Include Wavesurfer.js for audio visualization -->
+    <script src="https://unpkg.com/wavesurfer.js"></script>
+    <script src="static/js/main.js"></script>
+</body>
+</html>
