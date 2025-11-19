@@ -1,4 +1,4 @@
-import { Bolt Database } from './supabase';
+import { supabase } from './supabase';
 
 export interface Student {
   id: string;
