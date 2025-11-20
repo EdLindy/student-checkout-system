@@ -1,141 +1,282 @@
 import { useState, useEffect } from 'react';
-import { getStudents, checkoutStudent, Student } from '../lib/checkout-service';
-import { LogOut, Search } from 'lucide-react';
+import { CheckoutService } from '../lib/checkout-service';
+import { supabase, type Destination, type GenderAvailability } from '../lib/supabase';
+import { RefreshCw } from 'lucide-react';
 
-export default function StudentCheckout() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [destination, setDestination] = useState('');
-  const [notes, setNotes] = useState('');
+export function StudentCheckout() {
+  const [email, setEmail] = useState('');
+  const [destinationId, setDestinationId] = useState('');
+  const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [availability, setAvailability] = useState<GenderAvailability>({ male: true, female: true });
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ text: string; isSuccess: boolean } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [isCheckedOut, setIsCheckedOut] = useState(false);
 
   useEffect(() => {
-    loadStudents();
+    loadInitialData();
+    checkIfStudentCheckedOut();
+
+    const channel = supabase
+      .channel('checkout-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'current_checkouts' }, () => {
+        loadAvailability();
+        checkIfStudentCheckedOut();
+      })
+      .subscribe();
+
+    const interval = setInterval(() => {
+      loadAvailability();
+      checkIfStudentCheckedOut();
+    }, 5000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+    };
   }, []);
 
-  async function loadStudents() {
-    try {
-      const data = await getStudents();
-      setStudents(data);
-    } catch (error) {
-      console.error('Error loading students:', error);
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isCheckedOut) {
+        e.preventDefault();
+        e.returnValue = 'You are still checked out! Please check in before leaving.';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isCheckedOut]);
+
+  useEffect(() => {
+    if (email) {
+      checkIfStudentCheckedOut();
     }
-  }
+  }, [email]);
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      student.student_id.includes(searchTerm)
-  );
+  const loadInitialData = async () => {
+    await Promise.all([loadDestinations(), loadAvailability()]);
+  };
 
-  async function handleCheckout() {
-    if (!selectedStudent || !destination) return;
+  const loadDestinations = async () => {
+    const { data } = await supabase
+      .from('destinations')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_order');
+
+    if (data) setDestinations(data);
+  };
+
+  const loadAvailability = async () => {
+    const avail = await CheckoutService.getGenderAvailability();
+    setAvailability(avail);
+  };
+
+  const checkIfStudentCheckedOut = async () => {
+    const storedEmail = localStorage.getItem('checkedOutEmail');
+
+    if (storedEmail) {
+      const normalizedStoredEmail = storedEmail.toLowerCase().trim();
+      const { data: student } = await supabase
+        .from('students')
+        .select('id')
+        .eq('email', normalizedStoredEmail)
+        .maybeSingle();
+
+      if (student) {
+        const { data: checkout } = await supabase
+          .from('current_checkouts')
+          .select('id')
+          .eq('student_id', student.id)
+          .maybeSingle();
+
+        if (checkout) {
+          setEmail(storedEmail);
+          setIsCheckedOut(true);
+          return;
+        } else {
+          localStorage.removeItem('checkedOutEmail');
+          setIsCheckedOut(false);
+        }
+      }
+    }
+
+    if (!email.trim()) {
+      setIsCheckedOut(false);
+      return;
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const { data: student } = await supabase
+      .from('students')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (!student) {
+      setIsCheckedOut(false);
+      return;
+    }
+
+    const { data: checkout } = await supabase
+      .from('current_checkouts')
+      .select('id')
+      .eq('student_id', student.id)
+      .maybeSingle();
+
+    setIsCheckedOut(!!checkout);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadAvailability();
+    setRefreshing(false);
+  };
+
+  const handleCheckOut = async () => {
+    if (!email.trim() || !destinationId) {
+      setMessage({ text: 'Email and destination are required.', isSuccess: false });
+      return;
+    }
 
     setLoading(true);
-    try {
-      await checkoutStudent(selectedStudent.id, destination, notes);
-      setSelectedStudent(null);
-      setDestination('');
-      setNotes('');
-      setSearchTerm('');
-      alert('Student checked out successfully!');
-    } catch (error) {
-      console.error('Error checking out student:', error);
-      alert('Failed to check out student');
-    } finally {
-      setLoading(false);
+    setMessage(null);
+
+    const result = await CheckoutService.checkOut(email, destinationId);
+    setMessage({ text: result.message, isSuccess: result.success });
+
+    if (result.success) {
+      setDestinationId('');
+      localStorage.setItem('checkedOutEmail', email);
+      await loadAvailability();
+      await checkIfStudentCheckedOut();
     }
-  }
+
+    setLoading(false);
+  };
+
+  const handleCheckIn = async () => {
+    if (!email.trim()) {
+      setMessage({ text: 'Email is required to check in.', isSuccess: false });
+      return;
+    }
+
+    setLoading(true);
+    setMessage(null);
+
+    const result = await CheckoutService.checkIn(email);
+    setMessage({ text: result.message, isSuccess: result.success });
+
+    if (result.success) {
+      localStorage.removeItem('checkedOutEmail');
+      setEmail('');
+      setIsCheckedOut(false);
+      await loadAvailability();
+    }
+
+    setLoading(false);
+  };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-white rounded-xl shadow-lg p-8">
-        <div className="flex items-center mb-6">
-          <LogOut className="w-8 h-8 text-blue-600 mr-3" />
-          <h2 className="text-3xl font-bold text-slate-800">Check Out Student</h2>
-        </div>
+    <div className="max-w-lg mx-auto p-6">
+      <h2 className="text-3xl font-bold text-center text-blue-600 mb-8">
+        Student Checkout System
+      </h2>
 
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Search Student
-            </label>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by name or ID..."
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          {searchTerm && (
-            <div className="border border-slate-200 rounded-lg max-h-60 overflow-y-auto">
-              {filteredStudents.map((student) => (
-                <button
-                  key={student.id}
-                  onClick={() => {
-                    setSelectedStudent(student);
-                    setSearchTerm('');
-                  }}
-                  className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 transition-colors"
-                >
-                  <div className="font-medium text-slate-800">{student.name}</div>
-                  <div className="text-sm text-slate-500">
-                    ID: {student.student_id} | Grade: {student.grade}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {selectedStudent && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="font-medium text-blue-900">{selectedStudent.name}</div>
-              <div className="text-sm text-blue-700">
-                ID: {selectedStudent.student_id} | Grade: {selectedStudent.grade}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Destination
-            </label>
-            <input
-              type="text"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              placeholder="e.g., Restroom, Office, Library"
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">
-              Notes (Optional)
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Additional notes..."
-              rows={3}
-              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
+      <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold">Availability Status</h3>
           <button
-            onClick={handleCheckout}
-            disabled={!selectedStudent || !destination || loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors font-medium"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="px-4 py-2 bg-blue-50 text-blue-600 rounded-full text-sm font-medium hover:bg-blue-100 transition-colors disabled:opacity-50 flex items-center gap-2"
           >
-            {loading ? 'Checking Out...' : 'Check Out Student'}
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
         </div>
+        <div className="flex gap-4 justify-center">
+          <div className={`px-6 py-3 rounded-full font-semibold text-sm border-2 ${
+            availability.male
+              ? 'bg-green-50 text-green-700 border-green-300'
+              : 'bg-red-50 text-red-700 border-red-300'
+          }`}>
+            Boys: {availability.male ? 'Available' : 'Unavailable'}
+          </div>
+          <div className={`px-6 py-3 rounded-full font-semibold text-sm border-2 ${
+            availability.female
+              ? 'bg-green-50 text-green-700 border-green-300'
+              : 'bg-red-50 text-red-700 border-red-300'
+          }`}>
+            Girls: {availability.female ? 'Available' : 'Unavailable'}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="mb-4">
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+            Student Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="student@school.org"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+          />
+        </div>
+
+        <div className="mb-6">
+          <label htmlFor="destination" className="block text-sm font-medium text-gray-700 mb-2">
+            Destination
+          </label>
+          <select
+            id="destination"
+            value={destinationId}
+            onChange={(e) => setDestinationId(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+          >
+            <option value="">— Select a Destination —</option>
+            {destinations.map(dest => (
+              <option key={dest.id} value={dest.id}>{dest.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <button
+            onClick={handleCheckOut}
+            disabled={loading}
+            className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Processing...' : 'Check Out'}
+          </button>
+          <button
+            onClick={handleCheckIn}
+            disabled={loading}
+            className={`px-6 py-3 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              isCheckedOut
+                ? 'bg-red-600 hover:bg-red-700 dramatic-blink'
+                : 'bg-gray-600 hover:bg-gray-700'
+            }`}
+          >
+            Check In
+          </button>
+        </div>
+
+        {message && (
+          <div className={`px-6 py-3 rounded-lg font-medium text-center border-2 ${
+            message.isSuccess
+              ? 'bg-green-50 text-green-700 border-green-300'
+              : 'bg-red-50 text-red-700 border-red-300'
+          }`}>
+            {message.text}
+          </div>
+        )}
       </div>
     </div>
   );
