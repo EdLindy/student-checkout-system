@@ -1,4 +1,4 @@
-import { Bolt Database, type Student, type CurrentCheckout, type GenderAvailability } from './supabase';
+import { supabase, type Student, type CurrentCheckout, type GenderAvailability } from './supabase';
 
 export class CheckoutService {
   static async getGenderAvailability(): Promise<GenderAvailability> {
