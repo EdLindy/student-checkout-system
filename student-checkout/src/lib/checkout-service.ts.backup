@@ -2,7 +2,7 @@ import { supabase, type Student, type CurrentCheckout, type GenderAvailability }
 
 export class CheckoutService {
   static async getGenderAvailability(): Promise<GenderAvailability> {
-    const { data: checkouts } = await Bolt Database
+    const { data: checkouts } = await supabase
       .from('current_checkouts')
       .select(`
         id,
@@ -29,7 +29,7 @@ export class CheckoutService {
   }
 
   static async getCurrentCheckouts(): Promise<CurrentCheckout[]> {
-    const { data, error } = await Bolt Database
+    const { data, error } = await supabase
       .from('current_checkouts')
       .select(`
         *,
@@ -45,7 +45,7 @@ export class CheckoutService {
   static async checkOut(email: string, destinationId: string): Promise<{ success: boolean; message: string }> {
     const normalizedEmail = email.toLowerCase().trim();
 
-    const { data: student, error: studentError } = await Bolt Database
+    const { data: student, error: studentError } = await supabase
       .from('students')
       .select('*')
       .eq('email', normalizedEmail)
@@ -55,7 +55,7 @@ export class CheckoutService {
       return { success: false, message: 'Student not found in roster.' };
     }
 
-    const { data: existingCheckout } = await Bolt Database
+    const { data: existingCheckout } = await supabase
       .from('current_checkouts')
       .select('id')
       .eq('student_id', student.id)
@@ -73,7 +73,7 @@ export class CheckoutService {
       return { success: false, message: 'A girl is already checked out.' };
     }
 
-    const { data: destination } = await Bolt Database
+    const { data: destination } = await supabase
       .from('destinations')
       .select('name')
       .eq('id', destinationId)
@@ -83,7 +83,7 @@ export class CheckoutService {
       return { success: false, message: 'Invalid destination.' };
     }
 
-    const { data: settings } = await Bolt Database
+    const { data: settings } = await supabase
       .from('system_settings')
       .select('value')
       .eq('key', 'auto_return_minutes')
@@ -93,7 +93,7 @@ export class CheckoutService {
     const checkoutTime = new Date();
     const autoReturnAt = new Date(checkoutTime.getTime() + autoReturnMinutes * 60000);
 
-    const { error: checkoutError } = await Bolt Database
+    const { error: checkoutError } = await supabase
       .from('current_checkouts')
       .insert({
         student_id: student.id,
@@ -106,7 +106,7 @@ export class CheckoutService {
       return { success: false, message: 'Failed to check out. Please try again.' };
     }
 
-    await Bolt Database
+    await supabase
       .from('checkout_log')
       .insert({
         student_id: student.id,
@@ -125,7 +125,7 @@ export class CheckoutService {
   static async checkIn(email: string): Promise<{ success: boolean; message: string }> {
     const normalizedEmail = email.toLowerCase().trim();
 
-    const { data: student } = await Bolt Database
+    const { data: student } = await supabase
       .from('students')
       .select('*')
       .eq('email', normalizedEmail)
@@ -135,7 +135,7 @@ export class CheckoutService {
       return { success: false, message: 'Student not found in roster.' };
     }
 
-    const { data: checkout } = await Bolt Database
+    const { data: checkout } = await supabase
       .from('current_checkouts')
       .select(`
         *,
@@ -152,7 +152,7 @@ export class CheckoutService {
     const checkinTime = new Date();
     const durationMinutes = Math.round((checkinTime.getTime() - checkoutTime.getTime()) / 60000);
 
-    const { error: deleteError } = await Bolt Database
+    const { error: deleteError } = await supabase
       .from('current_checkouts')
       .delete()
       .eq('id', checkout.id);
@@ -161,7 +161,7 @@ export class CheckoutService {
       return { success: false, message: 'Failed to check in. Please try again.' };
     }
 
-    await Bolt Database
+    await supabase
       .from('checkout_log')
       .insert({
         student_id: student.id,
@@ -180,7 +180,7 @@ export class CheckoutService {
   }
 
   static async resetSystem(): Promise<{ success: boolean; message: string }> {
-    const { data: checkouts } = await Bolt Database
+    const { data: checkouts } = await supabase
       .from('current_checkouts')
       .select(`
         *,
@@ -195,7 +195,7 @@ export class CheckoutService {
         const checkoutTime = new Date(checkout.checkout_time);
         const durationMinutes = Math.round((Date.now() - checkoutTime.getTime()) / 60000);
 
-        await Bolt Database
+        await supabase
           .from('checkout_log')
           .insert({
             student_id: checkout.student.id,
@@ -212,7 +212,7 @@ export class CheckoutService {
       }
     }
 
-    const { error } = await Bolt Database
+    const { error } = await supabase
       .from('current_checkouts')
       .delete()
       .neq('id', '00000000-0000-0000-0000-000000000000');
