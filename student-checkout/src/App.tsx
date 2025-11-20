@@ -2,6 +2,7 @@ import { Link, Routes, Route } from 'react-router-dom';
 import StudentCheckout from './components/StudentCheckout';
 import TeacherDashboard from './components/TeacherDashboard';
 import AdminPanel from './components/AdminPanel';
+import AuthGuard from './components/AuthGuard';
 import { Users, LayoutDashboard, Settings } from 'lucide-react';
 
 export default function App() {
@@ -43,8 +44,8 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Routes>
           <Route index element={<StudentCheckout />} />
-          <Route path="dashboard" element={<TeacherDashboard />} />
-          <Route path="admin" element={<AdminPanel />} />
+          <Route path="dashboard" element={<AuthGuard requiredRole={undefined}><TeacherDashboard /></AuthGuard>} />
+          <Route path="admin" element={<AuthGuard requiredRole={'admin'}><AdminPanel /></AuthGuard>} />
         </Routes>
       </main>
     </div>
