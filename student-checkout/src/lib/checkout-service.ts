@@ -29,7 +29,7 @@ export class CheckoutService {
   }
 
   static async getCurrentCheckouts(): Promise<CurrentCheckout[]> {
-    const { data, error } = await supaabase
+    const { data, error } = await supabase
       .from('current_checkouts')
       .select(`
         *,
