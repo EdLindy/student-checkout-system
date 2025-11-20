@@ -7,17 +7,21 @@ import ActivityLog from './ActivityLog';
 export default function AdminPanel() {
   const [name, setName] = useState('');
   const [studentId, setStudentId] = useState('');
+  const [email, setEmail] = useState('');
   const [grade, setGrade] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   async function handleAddStudent(e: React.FormEvent) {
     e.preventDefault();
-    if (!name || !studentId || !grade) return;
+    if (!name || !studentId || !grade || !email) {
+      alert('Name, student ID, grade and email are required');
+      return;
+    }
 
     setLoading(true);
     try {
-      await addStudent(name, studentId, grade);
+      await addStudent(name, studentId, grade, email);
       setName('');
       setStudentId('');
       setGrade('');
@@ -46,11 +50,16 @@ export default function AdminPanel() {
 
       for (const row: any of jsonData) {
         try {
-          await addStudent(
-            row.name || row.Name,
-            String(row.student_id || row.StudentID || row.ID),
-            String(row.grade || row.Grade)
-          );
+          const parsedName = row.name || row.Name || '';
+          const parsedId = String(row.student_id || row.StudentID || row.ID || '').trim();
+          const parsedGrade = String(row.grade || row.Grade || '').trim();
+          const parsedEmail = String(row.email || row.Email || row.student_email || row.StudentEmail || '').trim();
+
+          if (!parsedEmail) {
+            throw new Error('Missing email for row');
+          }
+
+          await addStudent(parsedName, parsedId, parsedGrade, parsedEmail);
           successCount++;
         } catch (error) {
           console.error('Error adding student:', error);
@@ -87,6 +96,20 @@ export default function AdminPanel() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="John Doe"
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="student@school.org"
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
               />

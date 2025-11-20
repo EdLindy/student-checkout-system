@@ -1,4 +1,6 @@
-import { supabase, type Student, type CurrentCheckout, type GenderAvailability } from './supabase';
+import { supabase, type Student, type CurrentCheckout, type GenderAvailability, type CheckoutLog } from './supabase';
+
+export type { CheckoutLog } from './supabase';
 
 export class CheckoutService {
   static async getGenderAvailability(): Promise<GenderAvailability> {
@@ -16,7 +18,7 @@ export class CheckoutService {
     };
 
     if (checkouts && checkouts.length > 0) {
-      checkouts.forEach(checkout => {
+      checkouts.forEach((checkout: any) => {
         if (checkout.student?.gender === 'Male') {
           availability.male = false;
         } else if (checkout.student?.gender === 'Female') {
@@ -227,4 +229,85 @@ export class CheckoutService {
       message: `System reset complete. ${checkedInCount} student${checkedInCount !== 1 ? 's' : ''} checked in.`
     };
   }
+}
+
+// Compatibility helper functions used by components
+export async function getActiveCheckouts(): Promise<CheckoutLog[]> {
+  const { data, error } = await supabase
+    .from('current_checkouts')
+    .select(`id, checkout_time, notes, students:students(*), destination:destinations(name)`)
+    .order('checkout_time', { ascending: true });
+
+  if (error) throw error;
+  // normalize rows into the shape components expect
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    checkout_time: row.checkout_time,
+    notes: row.notes ?? null,
+    students: row.students ?? null,
+    destination: row.destination ? (typeof row.destination === 'string' ? row.destination : row.destination.name) : null
+  }));
+}
+
+export async function returnStudent(checkoutId: string): Promise<void> {
+  // find the checkout with student info
+  const { data: checkoutRows, error: fetchError } = await supabase
+    .from('current_checkouts')
+    .select(`*, student:students(*), destination:destinations(name)`)
+    .eq('id', checkoutId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  const checkout = checkoutRows as any;
+  if (!checkout) throw new Error('Checkout not found');
+
+  const checkoutTime = new Date(checkout.checkout_time);
+  const checkinTime = new Date();
+  const durationMinutes = Math.round((checkinTime.getTime() - checkoutTime.getTime()) / 60000);
+
+  await supabase.from('checkout_log').insert({
+    student_id: checkout.student?.id,
+    student_name: checkout.student?.name,
+    student_email: checkout.student?.email,
+    student_gender: checkout.student?.gender,
+    class_name: checkout.student?.class_name,
+    destination_name: checkout.destination?.name ?? null,
+    action: 'IN',
+    checkout_time: checkout.checkout_time,
+    checkin_time: checkinTime.toISOString(),
+    duration_minutes: durationMinutes
+  });
+
+  await supabase.from('current_checkouts').delete().eq('id', checkoutId);
+}
+
+export async function getCheckoutHistory(): Promise<CheckoutLog[]> {
+  const { data, error } = await supabase
+    .from('checkout_log')
+    .select('*')
+    .order('checkout_time', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function deleteCheckoutRecord(id: string): Promise<void> {
+  const { error } = await supabase.from('checkout_log').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function addStudent(name: string, studentId: string, grade: string | undefined, email: string): Promise<void> {
+  if (!email || !email.trim()) {
+    throw new Error('Email is required to add a student');
+  }
+
+  const payload: any = {
+    name,
+    email: email.trim().toLowerCase()
+  };
+  if (studentId) payload.student_id = studentId;
+  if (grade) payload.grade = grade;
+
+  const { error } = await supabase.from('students').insert(payload);
+  if (error) throw error;
 }

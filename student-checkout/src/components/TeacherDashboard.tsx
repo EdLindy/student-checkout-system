@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getActiveCheckouts, returnStudent, CheckoutLog } from '../lib/checkout-service';
+import { getActiveCheckouts, returnStudent, type CheckoutLog } from '../lib/checkout-service';
 import { Clock, User, MapPin, CheckCircle } from 'lucide-react';
 
 export default function TeacherDashboard() {

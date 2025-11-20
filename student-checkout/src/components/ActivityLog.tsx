@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getCheckoutHistory, deleteCheckoutRecord, CheckoutLog } from '../lib/checkout-service';
+import { getCheckoutHistory, deleteCheckoutRecord, type CheckoutLog } from '../lib/checkout-service';
 import { History, Trash2 } from 'lucide-react';
 
 export default function ActivityLog() {

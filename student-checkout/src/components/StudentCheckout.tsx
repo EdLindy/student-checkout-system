@@ -281,3 +281,5 @@ export function StudentCheckout() {
     </div>
   );
 }
+
+export default StudentCheckout;
