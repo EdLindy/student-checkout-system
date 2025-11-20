@@ -48,8 +48,9 @@ export default function AdminPanel() {
       let successCount = 0;
       let errorCount = 0;
 
-      for (const row: any of jsonData) {
+      for (const rawRow of (jsonData as any[])) {
         try {
+          const row: any = rawRow;
           const parsedName = row.name || row.Name || '';
           const parsedId = String(row.student_id || row.StudentID || row.ID || '').trim();
           const parsedGrade = String(row.grade || row.Grade || '').trim();

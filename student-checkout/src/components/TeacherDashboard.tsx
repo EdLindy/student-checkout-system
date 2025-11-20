@@ -90,11 +90,11 @@ export default function TeacherDashboard() {
               <div className="space-y-2 mb-4">
                 <div className="flex items-center text-sm text-slate-600">
                   <MapPin className="w-4 h-4 mr-2 text-slate-400" />
-                  <span>{checkout.destination}</span>
+                  <span>{typeof checkout.destination === 'string' ? checkout.destination : checkout.destination?.name ?? ''}</span>
                 </div>
                 <div className="flex items-center text-sm text-slate-600">
                   <Clock className="w-4 h-4 mr-2 text-slate-400" />
-                  <span>{formatDuration(checkout.checkout_time)}</span>
+                  <span>{formatDuration(checkout.checkout_time ?? '')}</span>
                 </div>
               </div>
 

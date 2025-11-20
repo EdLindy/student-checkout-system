@@ -42,6 +42,8 @@ export type CheckoutLog = {
 	action?: string;
 	checkout_time?: string;
 	checkin_time?: string | null;
+	// alias used by components
+	return_time?: string | null;
 	duration_minutes?: number | null;
 	// optional helper fields used in UI
 	students?: Student | null;

@@ -85,9 +85,13 @@ export default function ActivityLog() {
                   <div className="font-medium text-slate-800">{record.students?.name}</div>
                   <div className="text-sm text-slate-500">Grade {record.students?.grade}</div>
                 </td>
-                <td className="px-4 py-3 text-slate-600">{record.destination}</td>
+                <td className="px-4 py-3 text-slate-600">
+                  {typeof record.destination === 'string'
+                    ? record.destination
+                    : record.destination?.name ?? ''}
+                </td>
                 <td className="px-4 py-3 text-sm text-slate-600">
-                  {formatDateTime(record.checkout_time)}
+                  {formatDateTime(record.checkout_time ?? '')}
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">
                   {record.return_time ? formatDateTime(record.return_time) : (
@@ -95,7 +99,7 @@ export default function ActivityLog() {
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">
-                  {formatDuration(record.checkout_time, record.return_time)}
+                  {formatDuration(record.checkout_time ?? '', record.return_time ?? null)}
                 </td>
                 <td className="px-4 py-3">
                   <button

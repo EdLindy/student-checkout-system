@@ -1,4 +1,4 @@
-import { supabase, type Student, type CurrentCheckout, type GenderAvailability, type CheckoutLog } from './supabase';
+import { supabase, type CurrentCheckout, type GenderAvailability, type CheckoutLog } from './supabase';
 
 export type { CheckoutLog } from './supabase';
 
