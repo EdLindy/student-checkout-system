@@ -96,6 +96,51 @@ export default function AdminPanel() {
       let successCount = 0;
       let errorCount = 0;
 
+      const sheetAsObjects = XLSX.utils.sheet_to_json(worksheet, {
+        defval: '',
+        blankrows: false
+      }) as Record<string, string | number | null>[];
+
+      const fromHeaders = sheetAsObjects
+        .map((row) => {
+          const parsedName = String(
+            row['Student Name'] ||
+              row['student_name'] ||
+              row['name'] ||
+              row['Name'] ||
+              ''
+          ).trim();
+          const parsedEmail = String(
+            row['Email'] ||
+              row['email'] ||
+              row['EmailAddress'] ||
+              row['StudentEmail'] ||
+              ''
+          ).trim();
+          const parsedClass = String(
+            row['Class'] ||
+              row['class'] ||
+              row['ClassName'] ||
+              row['class_name'] ||
+              ''
+          ).trim();
+          const parsedGenderRaw = String(
+            row['Gender'] ||
+              row['gender'] ||
+              row['Gender ' /* stray space */] ||
+              ''
+          ).trim();
+          return {
+            student: parsedName,
+            email: parsedEmail,
+            class: parsedClass,
+            gender: normalizeGender(parsedGenderRaw) ?? ''
+          };
+        })
+        .filter((row) => row.student || row.email || row.class || row.gender);
+
+      const rowsFromHeaders = fromHeaders.filter((row) => row.student && row.email);
+
       const positionalRows = XLSX.utils.sheet_to_json(worksheet, {
         header: 1,
         blankrows: false,
@@ -105,14 +150,18 @@ export default function AdminPanel() {
       const looksLikeHeader = (row: (string | number | null)[] | undefined) => {
         if (!row) return false;
         const headerText = row.map((cell) => String(cell ?? '').trim().toLowerCase());
-        return headerText.includes('student name') || headerText.includes('email') || headerText.includes('class');
+        return (
+          headerText.includes('student name') ||
+          headerText.includes('email') ||
+          headerText.includes('class')
+        );
       };
 
       const rawRows = looksLikeHeader(positionalRows[0])
         ? positionalRows.slice(1)
         : positionalRows;
 
-      const rows = rawRows
+      const rowsFromPositions = rawRows
         .map((cells) => cells.map((cell) => String(cell ?? '').trim()))
         .filter((cells) => cells.some((value) => value.length > 0))
         .map((cells) => {
@@ -127,6 +176,8 @@ export default function AdminPanel() {
             gender: normalizeGender(parsedGenderRaw) ?? ''
           };
         });
+
+      const rows = rowsFromHeaders.length > 0 ? rowsFromHeaders : rowsFromPositions;
 
       // Server-side validation + insertion
       const validateRes = await fetch('/.netlify/functions/validate-bulk-upload', {
