@@ -63,9 +63,19 @@ async function finalizeCheckoutRecord(
 
 function normalizeGender(value?: string | null): NormalizedGender | null {
   if (!value) return null;
-  const lower = value.toLowerCase();
-  if (lower.startsWith('m')) return 'Male';
-  if (lower.startsWith('f')) return 'Female';
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+
+  if (trimmed.startsWith('m') || trimmed.startsWith('b')) {
+    // handles values like "Male", "M", "Boy"
+    return 'Male';
+  }
+
+  if (trimmed.startsWith('f') || trimmed.startsWith('g')) {
+    // handles values like "Female", "F", "Girl"
+    return 'Female';
+  }
+
   return null;
 }
 
