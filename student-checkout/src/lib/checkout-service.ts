@@ -296,7 +296,14 @@ export async function deleteCheckoutRecord(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function addStudent(name: string, studentId: string, grade: string | undefined, email: string): Promise<void> {
+export async function addStudent(
+  name: string,
+  studentId: string,
+  grade: string | undefined,
+  email: string,
+  gender?: string | null,
+  className?: string | null
+): Promise<void> {
   if (!email || !email.trim()) {
     throw new Error('Email is required to add a student');
   }
@@ -307,6 +314,8 @@ export async function addStudent(name: string, studentId: string, grade: string 
   };
   if (studentId) payload.student_id = studentId;
   if (grade) payload.grade = grade;
+  if (gender) payload.gender = gender;
+  if (className) payload.class_name = className;
 
   const { error } = await supabase.from('students').insert(payload);
   if (error) throw error;

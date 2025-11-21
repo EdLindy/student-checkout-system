@@ -9,6 +9,8 @@ export default function AdminPanel() {
   const [studentId, setStudentId] = useState('');
   const [email, setEmail] = useState('');
   const [grade, setGrade] = useState('');
+  const [gender, setGender] = useState('');
+  const [className, setClassName] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -21,10 +23,12 @@ export default function AdminPanel() {
 
     setLoading(true);
     try {
-      await addStudent(name, studentId, grade, email);
+      await addStudent(name, studentId, grade, email, gender || null, className || null);
       setName('');
       setStudentId('');
       setGrade('');
+      setGender('');
+      setClassName('');
       alert('Student added successfully!');
     } catch (error) {
       console.error('Error adding student:', error);
@@ -51,16 +55,21 @@ export default function AdminPanel() {
       for (const rawRow of (jsonData as any[])) {
         try {
           const row: any = rawRow;
-          const parsedName = row.name || row.Name || '';
-          const parsedId = String(row.student_id || row.StudentID || row.ID || '').trim();
-          const parsedGrade = String(row.grade || row.Grade || '').trim();
-          const parsedEmail = String(row.email || row.Email || row.student_email || row.StudentEmail || '').trim();
+          // Expecting columns: A: Student Name, B: Email, C: Gender (Male/Female), D: Class
+          const parsedName = String(row['Student Name'] || row['student_name'] || row.name || row.Name || '').trim();
+          const parsedEmail = String(row['Email'] || row.email || row.EmailAddress || row.StudentEmail || '').trim();
+          const parsedGenderRaw = String(row['Gender'] || row.gender || row.Gender || '').trim();
+          const parsedGender = parsedGenderRaw ? (parsedGenderRaw[0].toUpperCase() + parsedGenderRaw.slice(1).toLowerCase()) : null;
+          const parsedClass = String(row['Class'] || row.class || row.ClassName || row.class_name || '').trim();
+          // bulk uploads do not require a student id or grade column in this format
+          const parsedId = '';
+          const parsedGrade = '';
 
           if (!parsedEmail) {
             throw new Error('Missing email for row');
           }
 
-          await addStudent(parsedName, parsedId, parsedGrade, parsedEmail);
+          await addStudent(parsedName, parsedId, parsedGrade || undefined, parsedEmail, parsedGender || null, parsedClass || null);
           successCount++;
         } catch (error) {
           console.error('Error adding student:', error);
@@ -144,6 +153,20 @@ export default function AdminPanel() {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Gender</label>
+              <select value={gender} onChange={(e) => setGender(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg" required>
+                <option value="">Select</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Class</label>
+              <input type="text" value={className} onChange={(e) => setClassName(e.target.value)} placeholder="9A" className="w-full px-4 py-2 border border-slate-300 rounded-lg" required />
+            </div>
+
             <button
               type="submit"
               disabled={loading}
@@ -162,7 +185,7 @@ export default function AdminPanel() {
 
           <div className="space-y-4">
             <p className="text-slate-600">
-              Upload an Excel file with columns: name, student_id, grade
+              Upload an Excel (.xlsx) file with columns in this order: <strong>Column A:</strong> Student Name, <strong>Column B:</strong> Email, <strong>Column C:</strong> Gender (Male or Female), <strong>Column D:</strong> Class
             </p>
 
             <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center">
@@ -185,28 +208,29 @@ export default function AdminPanel() {
             </div>
 
             <div className="bg-slate-50 rounded-lg p-4">
-              <p className="text-sm font-medium text-slate-700 mb-2">
-                Excel Format Example:
-              </p>
+              <p className="text-sm font-medium text-slate-700 mb-2">Excel Format Example:</p>
               <div className="bg-white border border-slate-200 rounded text-xs overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-slate-100">
                     <tr>
-                      <th className="px-3 py-2 text-left">name</th>
-                      <th className="px-3 py-2 text-left">student_id</th>
-                      <th className="px-3 py-2 text-left">grade</th>
+                      <th className="px-3 py-2 text-left">Student Name</th>
+                      <th className="px-3 py-2 text-left">Email</th>
+                      <th className="px-3 py-2 text-left">Gender</th>
+                      <th className="px-3 py-2 text-left">Class</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
                       <td className="px-3 py-2 border-t">John Doe</td>
-                      <td className="px-3 py-2 border-t">123456</td>
-                      <td className="px-3 py-2 border-t">9</td>
+                      <td className="px-3 py-2 border-t">jdoe@spx.org</td>
+                      <td className="px-3 py-2 border-t">Male</td>
+                      <td className="px-3 py-2 border-t">9A</td>
                     </tr>
                     <tr>
                       <td className="px-3 py-2 border-t">Jane Smith</td>
-                      <td className="px-3 py-2 border-t">123457</td>
-                      <td className="px-3 py-2 border-t">10</td>
+                      <td className="px-3 py-2 border-t">jsmith@spx.org</td>
+                      <td className="px-3 py-2 border-t">Female</td>
+                      <td className="px-3 py-2 border-t">10B</td>
                     </tr>
                   </tbody>
                 </table>

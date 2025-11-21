@@ -102,3 +102,20 @@ Make sure row-level policies or permissions allow the anon/public key to read/wr
 ---
 
 If you want, I can also add example SQL to create the minimal set of tables above. Tell me if you want that included.
+
+## Netlify CLI: set environment variables (example)
+
+If you prefer to set the `VITE_` environment variables from the command line, use the Netlify CLI. Replace the example values with your real Supabase values. This uses the Netlify site name `305checkout` from your account.
+
+```bash
+# set using site name
+netlify env:set VITE_SUPABASE_URL "https://your-project-ref.supabase.co" --site 305checkout
+netlify env:set VITE_SUPABASE_ANON_KEY "your-anon-key" --site 305checkout
+
+# verify
+netlify env:list --site 305checkout
+```
+
+Notes:
+- Do not include angle brackets when running the commands.
+- If you prefer to use the site id instead of the name, replace `--site 305checkout` with `--site <site-id>` (the GUID shown by `netlify sites:list`).
