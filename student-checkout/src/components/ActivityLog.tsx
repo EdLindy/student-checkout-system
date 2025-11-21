@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo, useCallback, type ChangeEvent } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, type ChangeEvent } from 'react';
 import {
   getCheckoutHistory,
   getFullCheckoutHistory,
   deleteCheckoutRecord,
+  deleteCheckoutRecords,
+  clearCheckoutHistory,
   type CheckoutLog
 } from '../lib/checkout-service';
 import { supabase } from '../lib/supabase';
@@ -17,11 +19,16 @@ export default function ActivityLog() {
   const [exporting, setExporting] = useState(false);
   const [classes, setClasses] = useState<string[]>([]);
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+  const [showClassPicker, setShowClassPicker] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const classPickerRef = useRef<HTMLDivElement | null>(null);
 
   const loadHistory = useCallback(async () => {
     try {
       const data = await getCheckoutHistory();
       setHistory(data);
+      setSelectedRecordIds([]);
     } catch (error) {
       console.error('Error loading history:', error);
     } finally {
@@ -53,6 +60,18 @@ export default function ActivityLog() {
     loadHistory();
     loadClasses();
   }, [loadHistory, loadClasses]);
+
+  useEffect(() => {
+    if (!showClassPicker) return;
+    function handleClick(event: MouseEvent) {
+      if (!classPickerRef.current) return;
+      if (!classPickerRef.current.contains(event.target as Node)) {
+        setShowClassPicker(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showClassPicker]);
 
   useEffect(() => {
     const channel = supabase
@@ -99,10 +118,77 @@ export default function ActivityLog() {
 
     try {
       await deleteCheckoutRecord(id);
+      setSelectedRecordIds((prev) => prev.filter((selectedId) => selectedId !== id));
       loadHistory();
     } catch (error) {
       console.error('Error deleting record:', error);
       alert('Failed to delete record');
+    }
+  }
+
+  function toggleRecordSelection(id: string, checked: boolean) {
+    setSelectedRecordIds((previous) => {
+      if (checked) {
+        if (previous.includes(id)) return previous;
+        return [...previous, id];
+      }
+      return previous.filter((recordId) => recordId !== id);
+    });
+  }
+
+  const visibleRecordIds = useMemo(() => filteredHistory.map((record) => record.id), [filteredHistory]);
+  const allVisibleSelected =
+    visibleRecordIds.length > 0 && visibleRecordIds.every((id) => selectedRecordIds.includes(id));
+
+  function toggleSelectVisible() {
+    if (allVisibleSelected) {
+      setSelectedRecordIds((previous) => previous.filter((id) => !visibleRecordIds.includes(id)));
+      return;
+    }
+    setSelectedRecordIds((previous) => {
+      const merged = new Set(previous);
+      visibleRecordIds.forEach((id) => merged.add(id));
+      return Array.from(merged);
+    });
+  }
+
+  async function handleDeleteSelected() {
+    if (selectedRecordIds.length === 0) return;
+    if (!confirm(`Delete ${selectedRecordIds.length} selected record${selectedRecordIds.length > 1 ? 's' : ''}?`)) {
+      return;
+    }
+    setBulkDeleting(true);
+    try {
+      await deleteCheckoutRecords(selectedRecordIds);
+      setSelectedRecordIds([]);
+      await loadHistory();
+    } catch (error) {
+      console.error('Failed to delete selected records:', error);
+      alert('Failed to delete selected records.');
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  async function handleDeleteAll() {
+    if (!history.length) return;
+    if (
+      !confirm(
+        'This will permanently delete every activity log record. Are you sure you want to continue?'
+      )
+    ) {
+      return;
+    }
+    setBulkDeleting(true);
+    try {
+      await clearCheckoutHistory();
+      setSelectedRecordIds([]);
+      await loadHistory();
+    } catch (error) {
+      console.error('Failed to delete all records:', error);
+      alert('Failed to delete all records.');
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
@@ -225,46 +311,54 @@ export default function ActivityLog() {
           <label className="text-sm text-slate-600 mr-2">End date</label>
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="border px-2 py-1 rounded" />
         </div>
-        <div className="flex flex-col min-w-[260px]">
-          <label className="text-sm text-slate-600 mb-1">Classes</label>
-          <div className="flex flex-wrap gap-3">
-            <div className="border border-slate-200 rounded-lg bg-white px-3 py-2 min-w-[220px] max-h-36 overflow-y-auto">
-              {classes.length === 0 && <div className="text-sm text-slate-500">Loading classes…</div>}
-              {classes.map((className) => (
-                <label key={className} className="flex items-center gap-2 text-sm text-slate-700 py-1">
-                  <input
-                    type="checkbox"
-                    value={className}
-                    checked={selectedClasses.includes(className)}
-                    onChange={handleToggleClass}
-                    className="accent-blue-600"
-                  />
-                  <span>{className}</span>
-                </label>
-              ))}
+        <div className="flex flex-col min-w-[200px] relative" ref={classPickerRef}>
+          <span className="text-sm text-slate-600 mb-1">Room 305</span>
+          <button
+            type="button"
+            onClick={() => setShowClassPicker((prev) => !prev)}
+            className="border border-slate-300 px-4 py-2 rounded-lg bg-white text-sm text-slate-700 hover:border-blue-400 transition"
+          >
+            Room 305
+            <span className="ml-2 text-xs text-slate-500">
+              {selectedClasses.length === 0 ? 'All classes' : `${selectedClasses.length} selected`}
+            </span>
+          </button>
+          {showClassPicker && (
+            <div className="absolute mt-2 z-20 bg-white border border-slate-200 rounded-xl shadow-lg w-64 max-h-64 overflow-hidden">
+              <div className="max-h-44 overflow-y-auto px-3 py-2">
+                {classes.length === 0 && <div className="text-sm text-slate-500">Loading classes…</div>}
+                {classes.map((className) => (
+                  <label key={className} className="flex items-center gap-2 text-sm text-slate-700 py-1">
+                    <input
+                      type="checkbox"
+                      value={className}
+                      checked={selectedClasses.includes(className)}
+                      onChange={handleToggleClass}
+                      className="accent-blue-600"
+                    />
+                    <span>{className}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="border-t border-slate-100 flex items-center justify-between px-3 py-2 text-xs text-slate-600">
+                <button
+                  type="button"
+                  onClick={handleSelectAllClasses}
+                  className="text-blue-600 font-semibold disabled:opacity-50"
+                  disabled={classes.length === 0}
+                >
+                  Select All
+                </button>
+                <button type="button" onClick={handleClearClasses} className="text-slate-500">
+                  Clear
+                </button>
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={handleSelectAllClasses}
-                className="border border-slate-300 px-3 py-1.5 rounded text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                disabled={classes.length === 0}
-              >
-                Select All
-              </button>
-              <button
-                type="button"
-                onClick={handleClearClasses}
-                className="border border-slate-300 px-3 py-1.5 rounded text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
+          )}
           <p className="text-xs text-slate-500 mt-2">
             {selectedClasses.length === 0
-              ? 'No class filter applied—showing all activity.'
-              : `${selectedClasses.length} class${selectedClasses.length > 1 ? 'es' : ''} selected.`}
+              ? 'Room 305 is showing all classes.'
+              : `${selectedClasses.length} class${selectedClasses.length > 1 ? 'es' : ''} filtered.`}
           </p>
           {selectedClasses.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
@@ -295,10 +389,54 @@ export default function ActivityLog() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3 mb-3 text-sm text-slate-600">
+        <div>
+          {selectedRecordIds.length > 0
+            ? `${selectedRecordIds.length} record${selectedRecordIds.length > 1 ? 's' : ''} selected.`
+            : 'No records selected.'}
+        </div>
+        <div className="flex gap-2 ml-auto">
+          <button
+            type="button"
+            onClick={toggleSelectVisible}
+            className="px-3 py-1.5 border border-slate-300 rounded text-xs uppercase tracking-wide"
+            disabled={visibleRecordIds.length === 0}
+          >
+            {allVisibleSelected ? 'Clear Visible' : 'Select Visible'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteSelected}
+            disabled={selectedRecordIds.length === 0 || bulkDeleting}
+            className="px-3 py-1.5 border border-red-300 text-red-600 rounded text-xs uppercase tracking-wide disabled:opacity-50"
+          >
+            Delete Selected
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteAll}
+            disabled={history.length === 0 || bulkDeleting}
+            className="px-3 py-1.5 border border-red-400 bg-red-50 text-red-700 rounded text-xs uppercase tracking-wide disabled:opacity-50"
+          >
+            Delete All
+          </button>
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
+              <th className="px-4 py-3">
+                <input
+                  type="checkbox"
+                  className="accent-blue-600"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectVisible}
+                  disabled={visibleRecordIds.length === 0}
+                  aria-label="Select visible records"
+                />
+              </th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Student</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Destination</th>
               <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">Checkout</th>
@@ -310,6 +448,15 @@ export default function ActivityLog() {
           <tbody className="divide-y divide-slate-200">
             {filteredHistory.map((record) => (
               <tr key={record.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className="accent-blue-600"
+                    checked={selectedRecordIds.includes(record.id)}
+                    onChange={(e) => toggleRecordSelection(record.id, e.target.checked)}
+                    aria-label={`Select ${record.student_name ?? record.students?.name ?? 'record'}`}
+                  />
+                </td>
                 <td className="px-4 py-3">
                   <div className="font-medium text-slate-800">{record.student_name ?? record.students?.name}</div>
                   <div className="text-sm text-slate-500">Class {record.class_name ?? record.students?.class_name}</div>
@@ -328,7 +475,7 @@ export default function ActivityLog() {
                 <td className="px-4 py-3 text-sm text-slate-600">
                   {formatDuration(record.checkout_time ?? '', record.checkin_time ?? null)}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 flex gap-2">
                   <button
                     onClick={() => handleDelete(record.id)}
                     className="text-red-600 hover:text-red-700 transition-colors"

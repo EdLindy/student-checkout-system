@@ -560,6 +560,17 @@ export async function deleteCheckoutRecord(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function deleteCheckoutRecords(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const { error } = await supabase.from('checkout_log').delete().in('id', ids);
+  if (error) throw error;
+}
+
+export async function clearCheckoutHistory(): Promise<void> {
+  const { error } = await supabase.from('checkout_log').delete().not('id', 'is', null);
+  if (error) throw error;
+}
+
 export async function addStudent(
   name: string,
   email: string,
