@@ -5,6 +5,33 @@ import * as XLSX from 'xlsx';
 import ActivityLog from './ActivityLog';
 
 export default function AdminPanel() {
+    const normalizeGender = (value: string) => {
+      const cleaned = value
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z]/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean);
+
+      if (cleaned.length === 0) return '';
+
+      const matches = (keywords: string[]) => cleaned.some((token) => keywords.includes(token));
+
+      if (matches(['female', 'females', 'girl', 'girls', 'lady', 'ladies', 'woman', 'women', 'f', 'g'])) {
+        return 'Female';
+      }
+
+      if (matches(['male', 'males', 'boy', 'boys', 'man', 'men', 'gentleman', 'gentlemen', 'm', 'b'])) {
+        return 'Male';
+      }
+
+      const joined = cleaned.join(' ');
+      if (['female', 'girl'].some((keyword) => joined.startsWith(keyword))) return 'Female';
+      if (['male', 'boy'].some((keyword) => joined.startsWith(keyword))) return 'Male';
+
+      return '';
+    };
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [gender, setGender] = useState('');
@@ -95,10 +122,7 @@ export default function AdminPanel() {
         const parsedName = String(row['Student Name'] || row['student_name'] || row.name || row.Name || '').trim();
         const parsedEmail = String(row['Email'] || row.email || row.EmailAddress || row.StudentEmail || '').trim();
         const parsedGenderRaw = String(row['Gender'] || row.gender || row.Gender || '').trim();
-        const lowerGender = parsedGenderRaw.toLowerCase();
-        let parsedGender = '';
-        if (['m', 'male', 'boy', 'b'].includes(lowerGender)) parsedGender = 'Male';
-        else if (['f', 'female', 'girl', 'g'].includes(lowerGender)) parsedGender = 'Female';
+        const parsedGender = normalizeGender(parsedGenderRaw);
         const parsedClass = String(row['Class'] || row.class || row.ClassName || row.class_name || '').trim();
         return { student: parsedName, email: parsedEmail, gender: parsedGender, class: parsedClass };
       });

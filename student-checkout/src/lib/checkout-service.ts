@@ -13,6 +13,9 @@ type CheckoutFinalizationContext = {
 
 type NormalizedGender = 'Male' | 'Female';
 
+const FEMALE_KEYWORDS = ['female', 'females', 'girl', 'girls', 'lady', 'ladies', 'woman', 'women', 'f', 'g'];
+const MALE_KEYWORDS = ['male', 'males', 'boy', 'boys', 'man', 'men', 'gentleman', 'gentlemen', 'm', 'b'];
+
 async function finalizeCheckoutRecord(
   context: CheckoutFinalizationContext,
   action: FinalizeAction
@@ -63,18 +66,26 @@ async function finalizeCheckoutRecord(
 
 function normalizeGender(value?: string | null): NormalizedGender | null {
   if (!value) return null;
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return null;
+  const cleaned = value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, ' ') // remove numbers/punctuation
+    .split(/\s+/)
+    .filter(Boolean);
 
-  if (trimmed.startsWith('m') || trimmed.startsWith('b')) {
-    // handles values like "Male", "M", "Boy"
-    return 'Male';
-  }
+  if (cleaned.length === 0) return null;
 
-  if (trimmed.startsWith('f') || trimmed.startsWith('g')) {
-    // handles values like "Female", "F", "Girl"
-    return 'Female';
-  }
+  const matchesKeywords = (keywords: string[]) =>
+    cleaned.some((token) => keywords.includes(token));
+
+  if (matchesKeywords(FEMALE_KEYWORDS)) return 'Female';
+  if (matchesKeywords(MALE_KEYWORDS)) return 'Male';
+
+  // fallback: check joined string for words like "female" even if punctuation removed
+  const joined = cleaned.join(' ');
+  if (FEMALE_KEYWORDS.some((keyword) => joined.startsWith(keyword))) return 'Female';
+  if (MALE_KEYWORDS.some((keyword) => joined.startsWith(keyword))) return 'Male';
 
   return null;
 }

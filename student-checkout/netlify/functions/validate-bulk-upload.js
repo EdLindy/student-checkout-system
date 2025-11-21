@@ -6,6 +6,33 @@ const { createClient } = (() => {
   }
 })();
 
+const FEMALE_KEYWORDS = ['female', 'females', 'girl', 'girls', 'lady', 'ladies', 'woman', 'women', 'f', 'g'];
+const MALE_KEYWORDS = ['male', 'males', 'boy', 'boys', 'man', 'men', 'gentleman', 'gentlemen', 'm', 'b'];
+
+function normalizeGender(value) {
+  if (!value) return null;
+  const cleaned = value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (cleaned.length === 0) return null;
+
+  const matches = (keywords) => cleaned.some((token) => keywords.includes(token));
+
+  if (matches(FEMALE_KEYWORDS)) return 'Female';
+  if (matches(MALE_KEYWORDS)) return 'Male';
+
+  const joined = cleaned.join(' ');
+  if (FEMALE_KEYWORDS.some((keyword) => joined.startsWith(keyword))) return 'Female';
+  if (MALE_KEYWORDS.some((keyword) => joined.startsWith(keyword))) return 'Male';
+
+  return null;
+}
+
 exports.handler = async (event) => {
   try {
     const body = event.body ? JSON.parse(event.body) : {};
@@ -19,7 +46,7 @@ exports.handler = async (event) => {
     rows.forEach((r, idx) => {
       const student = (r.student || '').toString().trim();
       const email = (r.email || '').toString().trim().toLowerCase();
-      let gender = (r.gender || '').toString().trim();
+      let gender = normalizeGender(r.gender || '');
       const className = (r.class || r.class_name || '').toString().trim();
 
       if (!student) {
@@ -33,17 +60,7 @@ exports.handler = async (event) => {
       }
 
       if (!gender) {
-        invalid.push({ index: idx, reason: 'Missing gender' });
-        return;
-      }
-
-      const lowerGender = gender.toLowerCase();
-      if (['m', 'male', 'boy', 'b'].includes(lowerGender)) {
-        gender = 'Male';
-      } else if (['f', 'female', 'girl', 'g'].includes(lowerGender)) {
-        gender = 'Female';
-      } else {
-        invalid.push({ index: idx, reason: `Invalid gender: ${gender}` });
+        invalid.push({ index: idx, reason: 'Missing or invalid gender' });
         return;
       }
 
