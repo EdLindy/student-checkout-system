@@ -1,5 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
-import { getCheckoutHistory, deleteCheckoutRecord, type CheckoutLog } from '../lib/checkout-service';
+import { useState, useEffect, useMemo, useCallback, type ChangeEvent } from 'react';
+import {
+  getCheckoutHistory,
+  getFullCheckoutHistory,
+  deleteCheckoutRecord,
+  type CheckoutLog
+} from '../lib/checkout-service';
+import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
 import { History, Trash2 } from 'lucide-react';
 
 export default function ActivityLog() {
@@ -7,12 +14,11 @@ export default function ActivityLog() {
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [exporting, setExporting] = useState(false);
+  const [classes, setClasses] = useState<string[]>([]);
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
 
-  useEffect(() => {
-    loadHistory();
-  }, []);
-
-  async function loadHistory() {
+  const loadHistory = useCallback(async () => {
     try {
       const data = await getCheckoutHistory();
       setHistory(data);
@@ -21,7 +27,72 @@ export default function ActivityLog() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  const loadClasses = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('students').select('class_name').order('class_name');
+      if (error) throw error;
+
+      const unique = Array.from(
+        new Set(
+          (data || [])
+            .map((row) => (row.class_name ? String(row.class_name).trim() : ''))
+            .filter((val) => val.length > 0)
+        )
+      );
+
+      setClasses(unique);
+      setSelectedClasses((previous) => previous.filter((cls) => unique.includes(cls)));
+    } catch (error) {
+      console.error('Failed to load classes for filter', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+    loadClasses();
+  }, [loadHistory, loadClasses]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('activity-log-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'checkout_log' }, () => {
+        loadHistory();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadHistory]);
+
+  const filteredHistory = useMemo(() => {
+    const start = startDate ? new Date(startDate) : null;
+    const end = endDate ? new Date(endDate) : null;
+    const classSet =
+      selectedClasses.length > 0
+        ? new Set(selectedClasses.map((cls) => cls.trim().toLowerCase()))
+        : null;
+
+    return history.filter((rec) => {
+      const t = rec.checkout_time ? new Date(rec.checkout_time) : null;
+      if (!t) return false;
+      if (start && t < start) return false;
+      if (end) {
+        const endOfDay = new Date(end);
+        endOfDay.setHours(23, 59, 59, 999);
+        if (t > endOfDay) return false;
+      }
+
+      if (classSet) {
+        const recClass = (rec.class_name ?? rec.students?.class_name ?? '').trim().toLowerCase();
+        if (!classSet.has(recClass)) return false;
+      }
+
+      return true;
+    });
+  }, [history, startDate, endDate, selectedClasses]);
 
   async function handleDelete(id: string) {
     if (!confirm('Are you sure you want to delete this record?')) return;
@@ -54,55 +125,79 @@ export default function ActivityLog() {
     return `${hours}h ${mins}m`;
   }
 
-  const filteredHistory = useMemo(() => {
-    if (!startDate && !endDate) return history;
-    const start = startDate ? new Date(startDate) : null;
-    const end = endDate ? new Date(endDate) : null;
-    return history.filter((rec) => {
-      const t = rec.checkout_time ? new Date(rec.checkout_time) : null;
-      if (!t) return false;
-      if (start && t < start) return false;
-      if (end) {
-        // include end day entire day
-        const endOfDay = new Date(end);
-        endOfDay.setHours(23, 59, 59, 999);
-        if (t > endOfDay) return false;
-      }
-      return true;
-    });
-  }, [history, startDate, endDate]);
+  function sortByClassOrder(values: string[]) {
+    const orderMap = new Map(classes.map((cls, index) => [cls, index]));
+    return [...values].sort((a, b) => (orderMap.get(a) ?? 0) - (orderMap.get(b) ?? 0));
+  }
 
-  async function exportPdf() {
-    const rows = filteredHistory.map((record) => ({
-      student: record.student_name || record.students?.name || '',
-      destination: record.destination_name || (typeof record.destination === 'string' ? record.destination : record.destination?.name ?? ''),
-      checkout: record.checkout_time || '',
-      return: record.checkin_time || '',
-      duration: formatDuration(record.checkout_time || null, record.checkin_time || null)
-    }));
+  function handleToggleClass(event: ChangeEvent<HTMLInputElement>) {
+    const { value, checked } = event.target;
+    setSelectedClasses((previous) => {
+      if (checked) {
+        if (previous.includes(value)) return previous;
+        return sortByClassOrder([...previous, value]);
+      }
+      return previous.filter((cls) => cls !== value);
+    });
+  }
+
+  function handleSelectAllClasses() {
+    setSelectedClasses(sortByClassOrder(classes));
+  }
+
+  function handleClearClasses() {
+    setSelectedClasses([]);
+  }
+
+  function handleRemoveClass(className: string) {
+    setSelectedClasses((previous) => previous.filter((cls) => cls !== className));
+  }
+
+  async function exportXlsx() {
+    setExporting(true);
 
     try {
-      const res = await fetch('/.netlify/functions/generate-activity-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows })
-      });
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || 'Failed to generate PDF');
+      const hasFilters = Boolean(startDate || endDate || selectedClasses.length > 0);
+      const rows: CheckoutLog[] = hasFilters ? filteredHistory : await getFullCheckoutHistory();
+
+      if (rows.length === 0) {
+        alert('No records match the selected filters.');
+        return;
       }
-      const blob = await res.blob();
+
+      const exportRows = rows.map((record) => ({
+        Student: record.student_name || record.students?.name || '',
+        Class: record.class_name || record.students?.class_name || '',
+        Destination:
+          record.destination_name ||
+          (typeof record.destination === 'string'
+            ? record.destination
+            : record.destination?.name || ''),
+        Checkout: record.checkout_time ? formatDateTime(record.checkout_time) : '',
+        Return: record.checkin_time ? formatDateTime(record.checkin_time) : '',
+        Duration: formatDuration(record.checkout_time ?? '', record.checkin_time ?? null)
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Activity Log');
+      const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'activity-log.pdf';
+      a.download = 'activity-log.xlsx';
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('PDF export failed:', err);
-      alert('Failed to generate PDF. See console for details.');
+      console.error('XLSX export failed:', err);
+      alert('Failed to generate XLSX. See console for details.');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -121,7 +216,7 @@ export default function ActivityLog() {
         <h2 className="text-2xl font-bold text-slate-800">Activity Log</h2>
       </div>
 
-      <div className="mb-4 flex items-center gap-4">
+      <div className="mb-4 flex flex-wrap items-end gap-4">
         <div>
           <label className="text-sm text-slate-600 mr-2">Start date</label>
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="border px-2 py-1 rounded" />
@@ -130,8 +225,73 @@ export default function ActivityLog() {
           <label className="text-sm text-slate-600 mr-2">End date</label>
           <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="border px-2 py-1 rounded" />
         </div>
+        <div className="flex flex-col min-w-[260px]">
+          <label className="text-sm text-slate-600 mb-1">Classes</label>
+          <div className="flex flex-wrap gap-3">
+            <div className="border border-slate-200 rounded-lg bg-white px-3 py-2 min-w-[220px] max-h-36 overflow-y-auto">
+              {classes.length === 0 && <div className="text-sm text-slate-500">Loading classes…</div>}
+              {classes.map((className) => (
+                <label key={className} className="flex items-center gap-2 text-sm text-slate-700 py-1">
+                  <input
+                    type="checkbox"
+                    value={className}
+                    checked={selectedClasses.includes(className)}
+                    onChange={handleToggleClass}
+                    className="accent-blue-600"
+                  />
+                  <span>{className}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleSelectAllClasses}
+                className="border border-slate-300 px-3 py-1.5 rounded text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                disabled={classes.length === 0}
+              >
+                Select All
+              </button>
+              <button
+                type="button"
+                onClick={handleClearClasses}
+                className="border border-slate-300 px-3 py-1.5 rounded text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">
+            {selectedClasses.length === 0
+              ? 'No class filter applied—showing all activity.'
+              : `${selectedClasses.length} class${selectedClasses.length > 1 ? 'es' : ''} selected.`}
+          </p>
+          {selectedClasses.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {selectedClasses.map((className) => (
+                <span key={className} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">
+                  {className}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveClass(className)}
+                    className="text-blue-600 hover:text-blue-800"
+                    aria-label={`Remove ${className}`}
+                  >
+                    x
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="ml-auto">
-          <button onClick={exportPdf} className="bg-blue-600 text-white px-4 py-2 rounded">Print / Download PDF</button>
+          <button
+            onClick={exportXlsx}
+            disabled={exporting}
+            className="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-slate-400 disabled:cursor-not-allowed"
+          >
+            {exporting ? 'Preparing…' : 'Download .xlsx'}
+          </button>
         </div>
       </div>
 
@@ -152,7 +312,7 @@ export default function ActivityLog() {
               <tr key={record.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <div className="font-medium text-slate-800">{record.student_name ?? record.students?.name}</div>
-                  <div className="text-sm text-slate-500">Grade {record.class_name ?? record.students?.grade}</div>
+                  <div className="text-sm text-slate-500">Class {record.class_name ?? record.students?.class_name}</div>
                 </td>
                 <td className="px-4 py-3 text-slate-600">
                   {record.destination_name ?? (typeof record.destination === 'string' ? record.destination : record.destination?.name ?? '')}

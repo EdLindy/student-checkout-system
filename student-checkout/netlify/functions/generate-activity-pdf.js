@@ -1,5 +1,13 @@
 const PDFDocument = require('pdfkit');
 
+function drawTableRow(doc, y, cols, widths) {
+  const startX = doc.page.margins.left;
+  for (let i = 0; i < cols.length; i++) {
+    const x = startX + widths.slice(0, i).reduce((a, b) => a + b, 0);
+    doc.text(cols[i] || '', x + 2, y, { width: widths[i] - 4, continued: false });
+  }
+}
+
 exports.handler = async (event) => {
   try {
     const payload = event.body ? JSON.parse(event.body) : {};
@@ -9,19 +17,19 @@ exports.handler = async (event) => {
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
 
-    // header
-    doc.fontSize(16).text('Activity Log', { align: 'center' }).moveDown();
+    const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const colWidths = [pageWidth * 0.25, pageWidth * 0.25, pageWidth * 0.2, pageWidth * 0.2, pageWidth * 0.1];
+
+    doc.fontSize(16).text('Activity Log', { align: 'center' }).moveDown(0.5);
     doc.fontSize(10);
 
-    // table header
-    const startX = doc.x;
-    const columnPositions = [startX, startX + 160, startX + 320, startX + 480];
-    doc.text('Student', columnPositions[0], doc.y);
-    doc.text('Destination', columnPositions[1], doc.y);
-    doc.text('Checkout', columnPositions[2], doc.y);
-    doc.text('Return', columnPositions[3], doc.y);
-    doc.text('Duration', columnPositions[3] + 140, doc.y);
-    doc.moveDown();
+    let y = doc.y;
+    const lineHeight = 16;
+
+    // header
+    drawTableRow(doc, y, ['Student', 'Destination', 'Checkout', 'Return', 'Duration'], colWidths);
+    y += lineHeight;
+    doc.moveTo(doc.page.margins.left, y - 6).lineTo(doc.page.width - doc.page.margins.right, y - 6).stroke();
 
     for (const r of rows) {
       const student = r.student || '';
@@ -30,12 +38,23 @@ exports.handler = async (event) => {
       const ret = r.return ? new Date(r.return).toLocaleString() : '';
       const duration = r.duration || '';
 
-      doc.text(student, columnPositions[0], doc.y, { width: 150 });
-      doc.text(destination, columnPositions[1], doc.y, { width: 150 });
-      doc.text(checkout, columnPositions[2], doc.y, { width: 150 });
-      doc.text(ret, columnPositions[3], doc.y, { width: 150 });
-      doc.text(duration, columnPositions[3] + 140, doc.y, { width: 100 });
-      doc.moveDown();
+      // Estimate height needed for the student/destination cells (wrap)
+      const maxLines = Math.max(
+        Math.ceil(doc.widthOfString(student) / colWidths[0]),
+        Math.ceil(doc.widthOfString(destination) / colWidths[1]),
+        1
+      );
+      const blockHeight = Math.max(lineHeight * maxLines, lineHeight);
+
+      if (y + blockHeight > doc.page.height - doc.page.margins.bottom) {
+        doc.addPage();
+        y = doc.y;
+        drawTableRow(doc, y, ['Student', 'Destination', 'Checkout', 'Return', 'Duration'], colWidths);
+        y += lineHeight;
+      }
+
+      drawTableRow(doc, y, [student, destination, checkout, ret, duration], colWidths);
+      y += blockHeight;
     }
 
     doc.end();

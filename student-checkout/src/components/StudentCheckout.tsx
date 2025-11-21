@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CheckoutService } from '../lib/checkout-service';
 import { supabase, type Destination, type GenderAvailability } from '../lib/supabase';
 import { RefreshCw } from 'lucide-react';
@@ -12,6 +12,8 @@ export function StudentCheckout() {
   const [message, setMessage] = useState<{ text: string; isSuccess: boolean } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isCheckedOut, setIsCheckedOut] = useState(false);
+  const emailRef = useRef('');
+  const lastWarningRef = useRef(0);
 
   useEffect(() => {
     loadInitialData();
@@ -26,7 +28,7 @@ export function StudentCheckout() {
       .subscribe();
 
     const interval = setInterval(() => {
-      loadAvailability();
+      loadAvailability(emailRef.current);
       checkIfStudentCheckedOut();
     }, 5000);
 
@@ -35,6 +37,11 @@ export function StudentCheckout() {
       clearInterval(interval);
     };
   }, []);
+
+  useEffect(() => {
+    emailRef.current = email;
+    loadAvailability(email);
+  }, [email]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -50,13 +57,44 @@ export function StudentCheckout() {
   }, [isCheckedOut]);
 
   useEffect(() => {
+    if (!isCheckedOut) return;
+
+    const warnAndFocus = () => {
+      if (!isCheckedOut) return;
+      const now = Date.now();
+      if (now - lastWarningRef.current < 2000) return;
+      lastWarningRef.current = now;
+      alert('You are still checked out. Please return to the Student Checkout System and check back in.');
+      window.focus();
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        warnAndFocus();
+      }
+    };
+
+    const handleBlur = () => {
+      warnAndFocus();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [isCheckedOut]);
+
+  useEffect(() => {
     if (email) {
       checkIfStudentCheckedOut();
     }
   }, [email]);
 
   const loadInitialData = async () => {
-    await Promise.all([loadDestinations(), loadAvailability()]);
+    await Promise.all([loadDestinations(), loadAvailability(emailRef.current)]);
   };
 
   const loadDestinations = async () => {
@@ -69,8 +107,14 @@ export function StudentCheckout() {
     if (data) setDestinations(data);
   };
 
-  const loadAvailability = async () => {
-    const avail = await CheckoutService.getGenderAvailability();
+  const loadAvailability = async (targetEmail?: string) => {
+    const normalized = targetEmail?.trim();
+    if (!normalized) {
+      setAvailability({ male: true, female: true });
+      return;
+    }
+
+    const avail = await CheckoutService.getGenderAvailability(normalized);
     setAvailability(avail);
   };
 
@@ -131,7 +175,7 @@ export function StudentCheckout() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadAvailability();
+    await loadAvailability(email);
     setRefreshing(false);
   };
 
@@ -150,7 +194,7 @@ export function StudentCheckout() {
     if (result.success) {
       setDestinationId('');
       localStorage.setItem('checkedOutEmail', email);
-      await loadAvailability();
+      await loadAvailability(email);
       await checkIfStudentCheckedOut();
     }
 
@@ -173,7 +217,7 @@ export function StudentCheckout() {
       localStorage.removeItem('checkedOutEmail');
       setEmail('');
       setIsCheckedOut(false);
-      await loadAvailability();
+      await loadAvailability(email);
     }
 
     setLoading(false);
@@ -213,6 +257,9 @@ export function StudentCheckout() {
             Girls: {availability.female ? 'Available' : 'Unavailable'}
           </div>
         </div>
+        <p className="text-xs text-slate-500 text-center mt-3">
+          Availability updates after you enter your email and is limited to your class.
+        </p>
       </div>
 
       <div className="bg-white rounded-xl shadow-lg p-6">
@@ -260,7 +307,7 @@ export function StudentCheckout() {
             disabled={loading}
             className={`px-6 py-3 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               isCheckedOut
-                ? 'bg-red-600 hover:bg-red-700 dramatic-blink'
+                ? 'bg-red-600 hover:bg-red-700 blink-red'
                 : 'bg-gray-600 hover:bg-gray-700'
             }`}
           >

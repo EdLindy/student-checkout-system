@@ -23,7 +23,7 @@ export type CurrentCheckout = {
 	id: string;
 	student_id?: string;
 	checkout_time?: string;
-	auto_return_at?: string;
+	auto_return_at?: string | null;
 	notes?: string | null;
 	destination?: { name?: string } | string | null;
 	students?: Student | null;
@@ -49,6 +49,7 @@ export type CheckoutLog = {
 	students?: Student | null;
 	destination?: string | { name?: string } | null;
 	notes?: string | null;
+	auto_return_at?: string | null;
 };
 
 export const supabase = createClient(String(supabaseUrl ?? ''), String(supabaseAnonKey ?? ''));

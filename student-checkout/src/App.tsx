@@ -1,9 +1,11 @@
+import { Suspense, lazy } from 'react';
 import { Link, Routes, Route } from 'react-router-dom';
-import StudentCheckout from './components/StudentCheckout';
-import TeacherDashboard from './components/TeacherDashboard';
-import AdminPanel from './components/AdminPanel';
 import AuthGuard from './components/AuthGuard';
 import { Users, LayoutDashboard, Settings } from 'lucide-react';
+
+const StudentCheckout = lazy(() => import('./components/StudentCheckout'));
+const TeacherDashboard = lazy(() => import('./components/TeacherDashboard'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
 
 export default function App() {
   return (
@@ -42,11 +44,19 @@ export default function App() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Routes>
-          <Route index element={<StudentCheckout />} />
-          <Route path="dashboard" element={<AuthGuard requiredRole={undefined}><TeacherDashboard /></AuthGuard>} />
-          <Route path="admin" element={<AuthGuard requiredRole={'admin'}><AdminPanel /></AuthGuard>} />
-        </Routes>
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-20 text-slate-500">
+              Loading view…
+            </div>
+          }
+        >
+          <Routes>
+            <Route index element={<StudentCheckout />} />
+            <Route path="dashboard" element={<AuthGuard requiredRole={undefined}><TeacherDashboard /></AuthGuard>} />
+            <Route path="admin" element={<AuthGuard requiredRole={'admin'}><AdminPanel /></AuthGuard>} />
+          </Routes>
+        </Suspense>
       </main>
     </div>
   );
