@@ -12,8 +12,8 @@ export function StudentCheckout() {
   const [message, setMessage] = useState<{ text: string; isSuccess: boolean } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isCheckedOut, setIsCheckedOut] = useState(false);
-  const [selectedGender, setSelectedGender] = useState<NormalizedGender | ''>('');
-  const [genderLoading, setGenderLoading] = useState(false);
+  const [rosterGender, setRosterGender] = useState<NormalizedGender | ''>('');
+  const [rosterGenderLoading, setRosterGenderLoading] = useState(false);
   const emailRef = useRef('');
   const lastWarningRef = useRef(0);
 
@@ -43,7 +43,7 @@ export function StudentCheckout() {
   useEffect(() => {
     emailRef.current = email;
     loadAvailability(email);
-    loadStudentProfile(email);
+    loadRosterGender(email);
   }, [email]);
 
   useEffect(() => {
@@ -97,16 +97,21 @@ export function StudentCheckout() {
   }, [email]);
 
   const loadInitialData = async () => {
-    await Promise.all([loadDestinations(), loadAvailability(emailRef.current)]);
+    await Promise.all([
+      loadDestinations(),
+      loadAvailability(emailRef.current),
+      loadRosterGender(emailRef.current)
+    ]);
   };
-  const loadStudentProfile = async (targetEmail?: string) => {
+
+  const loadRosterGender = async (targetEmail?: string) => {
     const normalized = targetEmail?.trim().toLowerCase();
     if (!normalized) {
-      setSelectedGender('');
+      setRosterGender('');
       return;
     }
 
-    setGenderLoading(true);
+    setRosterGenderLoading(true);
     try {
       const { data: student } = await supabase
         .from('students')
@@ -114,9 +119,9 @@ export function StudentCheckout() {
         .eq('email', normalized)
         .maybeSingle();
       const normalizedGender = normalizeGender(student?.gender) ?? '';
-      setSelectedGender(normalizedGender);
+      setRosterGender(normalizedGender);
     } finally {
-      setGenderLoading(false);
+      setRosterGenderLoading(false);
     }
   };
 
@@ -209,22 +214,22 @@ export function StudentCheckout() {
       return;
     }
 
-    if (!selectedGender) {
-      setMessage({ text: 'Select your gender before checking out.', isSuccess: false });
+    if (!rosterGender) {
+      setMessage({ text: 'No roster gender found for this email. Please contact your teacher.', isSuccess: false });
       return;
     }
 
     setLoading(true);
     setMessage(null);
 
-    const result = await CheckoutService.checkOut(email, destinationId, selectedGender);
+    const result = await CheckoutService.checkOut(email, destinationId, rosterGender);
     setMessage({ text: result.message, isSuccess: result.success });
 
     if (result.success) {
       setDestinationId('');
       localStorage.setItem('checkedOutEmail', email);
       await loadAvailability(email);
-      await loadStudentProfile(email);
+      await loadRosterGender(email);
       await checkIfStudentCheckedOut();
     }
 
@@ -248,7 +253,7 @@ export function StudentCheckout() {
       setEmail('');
       setIsCheckedOut(false);
       await loadAvailability(email);
-      await loadStudentProfile(email);
+      await loadRosterGender(email);
     }
 
     setLoading(false);
@@ -310,33 +315,16 @@ export function StudentCheckout() {
 
         {email.trim() && (
           <div className="mb-4">
-            <p className="text-sm font-medium text-gray-700 mb-2">Confirm Gender</p>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="radio"
-                  name="gender"
-                  value="Male"
-                  checked={selectedGender === 'Male'}
-                  onChange={() => setSelectedGender('Male')}
-                  disabled={genderLoading}
-                />
-                Boy
-              </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="radio"
-                  name="gender"
-                  value="Female"
-                  checked={selectedGender === 'Female'}
-                  onChange={() => setSelectedGender('Female')}
-                  disabled={genderLoading}
-                />
-                Girl
-              </label>
+            <p className="text-sm font-medium text-gray-700 mb-1">Roster Gender</p>
+            <div className="px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-700">
+              {rosterGenderLoading
+                ? 'Looking up your roster information…'
+                : rosterGender
+                  ? `${rosterGender === 'Male' ? 'Boys' : 'Girls'} roster`
+                  : 'We could not find your roster gender. Please contact your teacher.'}
             </div>
             <p className="text-xs text-slate-500 mt-2">
-              This ensures only one boy and one girl from your class are out at a time.
+              We automatically verify this against the class roster you were added from.
             </p>
           </div>
         )}

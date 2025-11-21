@@ -3,7 +3,6 @@ import {
   addStudent,
   getClassesWithStudents,
   CheckoutService,
-  updateStudentGender,
   normalizeRosterGenders,
   normalizeGender,
   type ClassGroup
@@ -23,8 +22,6 @@ export default function AdminPanel() {
   const [classesLoading, setClassesLoading] = useState(true);
   const [expandedClass, setExpandedClass] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
-  const [genderUpdates, setGenderUpdates] = useState<Record<string, string>>({});
-  const [updatingGenderId, setUpdatingGenderId] = useState<string | null>(null);
   const [normalizingGenders, setNormalizingGenders] = useState(false);
 
   useEffect(() => {
@@ -401,56 +398,18 @@ export default function AdminPanel() {
 
                     {isExpanded && (
                       <div className="mt-3 space-y-2">
-                        {classGroup.students.map((student) => {
-                          const studentId = student.id ?? student.email;
-                          const pendingGender = genderUpdates[studentId] ?? student.gender ?? '';
-                          return (
-                            <div
-                              key={studentId}
-                              className="bg-slate-50 rounded-lg px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                            >
-                              <div>
-                                <p className="font-medium text-slate-800">{student.name}</p>
-                                <p className="text-sm text-slate-500">{student.email}</p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <select
-                                  value={pendingGender}
-                                  onChange={(e) =>
-                                    setGenderUpdates((prev) => ({ ...prev, [studentId]: e.target.value }))
-                                  }
-                                  className="border border-slate-300 rounded-lg px-2 py-1 text-sm"
-                                >
-                                  <option value="">Select gender</option>
-                                  <option value="Male">Male</option>
-                                  <option value="Female">Female</option>
-                                </select>
-                                <button
-                                  type="button"
-                                  disabled={!genderUpdates[studentId] || updatingGenderId === studentId}
-                                  onClick={async () => {
-                                    const newGender = genderUpdates[studentId];
-                                    if (!newGender || !student.id) return;
-                                    setUpdatingGenderId(studentId);
-                                    try {
-                                      await updateStudentGender(student.id, newGender as 'Male' | 'Female');
-                                      setGenderUpdates((prev) => ({ ...prev, [studentId]: '' }));
-                                      await loadClasses();
-                                    } catch (error) {
-                                      console.error('Failed to update gender', error);
-                                      alert('Failed to update student gender.');
-                                    } finally {
-                                      setUpdatingGenderId(null);
-                                    }
-                                  }}
-                                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm disabled:bg-slate-300 disabled:cursor-not-allowed"
-                                >
-                                  {updatingGenderId === studentId ? 'Saving…' : 'Save'}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        {classGroup.students.map((student) => (
+                          <div
+                            key={student.id ?? student.email}
+                            className="bg-slate-50 rounded-lg px-4 py-3 flex flex-col gap-1"
+                          >
+                            <p className="font-medium text-slate-800">{student.name}</p>
+                            <p className="text-sm text-slate-500">{student.email}</p>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              {student.gender ? `Gender: ${student.gender}` : 'Gender missing'}
+                            </p>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>

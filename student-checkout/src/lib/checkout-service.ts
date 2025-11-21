@@ -585,8 +585,20 @@ export async function getClassesWithStudents(): Promise<ClassGroup[]> {
 
   if (error) throw error;
 
+  const rows = data ?? [];
+  const normalizedStudents: Student[] = await Promise.all(
+    rows.map(async (student) => {
+      const normalized = normalizeGender(student.gender);
+      if (normalized && student.gender !== normalized) {
+        await supabase.from('students').update({ gender: normalized }).eq('id', student.id);
+        return { ...student, gender: normalized };
+      }
+      return student;
+    })
+  );
+
   const groups = new Map<string, Student[]>();
-  (data ?? []).forEach((student) => {
+  normalizedStudents.forEach((student) => {
     const classValue = student.class_name ?? '';
     const keyRaw = typeof classValue === 'string' ? classValue.trim() : String(classValue).trim();
     const key = keyRaw.length > 0 ? keyRaw : 'Unassigned';
