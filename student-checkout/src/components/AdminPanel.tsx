@@ -92,21 +92,41 @@ export default function AdminPanel() {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
       let successCount = 0;
       let errorCount = 0;
 
-      // Normalize rows into expected shape
-      const rows: Array<any> = (jsonData as any[]).map((rawRow: any) => {
-        const row: any = rawRow || {};
-        const parsedName = String(row['Student Name'] || row['student_name'] || row.name || row.Name || '').trim();
-        const parsedEmail = String(row['Email'] || row.email || row.EmailAddress || row.StudentEmail || '').trim();
-        const parsedGenderRaw = String(row['Gender'] || row.gender || row.Gender || '').trim();
-        const parsedGender = normalizeGender(parsedGenderRaw) ?? '';
-        const parsedClass = String(row['Class'] || row.class || row.ClassName || row.class_name || '').trim();
-        return { student: parsedName, email: parsedEmail, gender: parsedGender, class: parsedClass };
-      });
+      const positionalRows = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        blankrows: false,
+        defval: ''
+      }) as (string | number | null)[][];
+
+      const looksLikeHeader = (row: (string | number | null)[] | undefined) => {
+        if (!row) return false;
+        const headerText = row.map((cell) => String(cell ?? '').trim().toLowerCase());
+        return headerText.includes('student name') || headerText.includes('email') || headerText.includes('class');
+      };
+
+      const rawRows = looksLikeHeader(positionalRows[0])
+        ? positionalRows.slice(1)
+        : positionalRows;
+
+      const rows = rawRows
+        .map((cells) => cells.map((cell) => String(cell ?? '').trim()))
+        .filter((cells) => cells.some((value) => value.length > 0))
+        .map((cells) => {
+          const parsedName = cells[0] ?? '';
+          const parsedEmail = cells[1] ?? '';
+          const parsedClass = cells[2] ?? '';
+          const parsedGenderRaw = cells[3] ?? '';
+          return {
+            student: parsedName,
+            email: parsedEmail,
+            class: parsedClass,
+            gender: normalizeGender(parsedGenderRaw) ?? ''
+          };
+        });
 
       // Server-side validation + insertion
       const validateRes = await fetch('/.netlify/functions/validate-bulk-upload', {
@@ -241,7 +261,7 @@ export default function AdminPanel() {
 
           <div className="space-y-4">
             <p className="text-slate-600">
-              Upload an Excel (.xlsx) file with columns in this order: <strong>Column A:</strong> Student Name, <strong>Column B:</strong> Email, <strong>Column C:</strong> Gender (Male or Female), <strong>Column D:</strong> Class
+              Upload an Excel (.xlsx) file with columns in this order: <strong>Column A:</strong> Student Name, <strong>Column B:</strong> Email, <strong>Column C:</strong> Class, <strong>Column D:</strong> Gender (Male or Female)
             </p>
 
             <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center">
@@ -270,7 +290,7 @@ export default function AdminPanel() {
                   <button
                     type="button"
                     onClick={() => {
-                      const csv = 'Student Name,Email,Gender,Class\nJohn Doe,jdoe@spx.org,Male,9A\nJane Smith,jsmith@spx.org,Female,10B\n';
+                      const csv = 'Student Name,Email,Class,Gender\nJohn Doe,jdoe@spx.org,9A,Male\nJane Smith,jsmith@spx.org,10B,Female\n';
                       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
