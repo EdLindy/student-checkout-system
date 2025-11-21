@@ -518,7 +518,7 @@ export default function AdminPanel() {
         <div className="bg-white rounded-xl shadow-lg p-8">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
             <div>
-              <h2 className="text-2xl font-bold text-slate-800">Classes</h2>
+              <h2 className="text-2xl font-bold text-slate-800">Room 305 Classes</h2>
               <p className="text-sm text-slate-500">Each class expands to show every student included in the roster.</p>
             </div>
             <button
