@@ -37,8 +37,12 @@ exports.handler = async (event) => {
         return;
       }
 
-      gender = gender[0].toUpperCase() + gender.slice(1).toLowerCase();
-      if (!['Male', 'Female'].includes(gender)) {
+      const lowerGender = gender.toLowerCase();
+      if (['m', 'male', 'boy', 'b'].includes(lowerGender)) {
+        gender = 'Male';
+      } else if (['f', 'female', 'girl', 'g'].includes(lowerGender)) {
+        gender = 'Female';
+      } else {
         invalid.push({ index: idx, reason: `Invalid gender: ${gender}` });
         return;
       }

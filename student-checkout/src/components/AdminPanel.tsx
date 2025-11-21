@@ -95,7 +95,10 @@ export default function AdminPanel() {
         const parsedName = String(row['Student Name'] || row['student_name'] || row.name || row.Name || '').trim();
         const parsedEmail = String(row['Email'] || row.email || row.EmailAddress || row.StudentEmail || '').trim();
         const parsedGenderRaw = String(row['Gender'] || row.gender || row.Gender || '').trim();
-        const parsedGender = parsedGenderRaw ? (parsedGenderRaw[0].toUpperCase() + parsedGenderRaw.slice(1).toLowerCase()) : '';
+        const lowerGender = parsedGenderRaw.toLowerCase();
+        let parsedGender = '';
+        if (['m', 'male', 'boy', 'b'].includes(lowerGender)) parsedGender = 'Male';
+        else if (['f', 'female', 'girl', 'g'].includes(lowerGender)) parsedGender = 'Female';
         const parsedClass = String(row['Class'] || row.class || row.ClassName || row.class_name || '').trim();
         return { student: parsedName, email: parsedEmail, gender: parsedGender, class: parsedClass };
       });
