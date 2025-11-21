@@ -329,6 +329,37 @@ export class CheckoutService {
 }
 
 // Compatibility helper functions used by components
+async function fetchActiveViaFunction(): Promise<CheckoutLog[] | null> {
+  if (typeof fetch === 'undefined') return null;
+
+  const endpoint = (import.meta.env.VITE_ACTIVE_CHECKOUTS_ENDPOINT || '/.netlify/functions/get-active-checkouts').trim();
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: { Accept: 'application/json' }
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        // likely running locally without Netlify functions proxy; fall back to Supabase
+        return null;
+      }
+      const text = await response.text();
+      throw new Error(text || `Request failed with status ${response.status}`);
+    }
+
+    const payload = await response.json();
+    if (payload && Array.isArray(payload.rows)) {
+      return payload.rows as CheckoutLog[];
+    }
+    return null;
+  } catch (error) {
+    console.error('Active checkout function request failed', error);
+    return null;
+  }
+}
+
 function shapeCurrentCheckoutRow(row: any): CheckoutLog {
   const students = row.students ?? null;
   const destination = row.destination ?? null;
@@ -377,6 +408,11 @@ function shapeCheckoutLogRow(row: any): CheckoutLog {
 }
 
 export async function getActiveCheckouts(): Promise<CheckoutLog[]> {
+  const functionRows = await fetchActiveViaFunction();
+  if (functionRows) {
+    return functionRows;
+  }
+
   let currentRows: any[] = [];
   try {
     const { data } = await supabase
