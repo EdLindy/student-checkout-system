@@ -531,6 +531,39 @@ export type ClassGroup = {
   students: Student[];
 };
 
+export async function updateStudentGender(studentId: string, gender: NormalizedGender): Promise<void> {
+  const { error } = await supabase
+    .from('students')
+    .update({ gender })
+    .eq('id', studentId);
+  if (error) throw error;
+}
+
+export async function normalizeRosterGenders(): Promise<{ updated: number; total: number }> {
+  const { data, error } = await supabase.from('students').select('id, gender');
+  if (error) throw error;
+
+  const rows = data || [];
+  let updated = 0;
+
+  for (const student of rows) {
+    const normalized = normalizeGender(student.gender);
+    if (normalized && student.gender !== normalized) {
+      const { error: updateError } = await supabase
+        .from('students')
+        .update({ gender: normalized })
+        .eq('id', student.id);
+      if (updateError) {
+        console.error('Failed to normalize gender for student', student.id, updateError);
+      } else {
+        updated += 1;
+      }
+    }
+  }
+
+  return { updated, total: rows.length };
+}
+
 export async function getClassesWithStudents(): Promise<ClassGroup[]> {
   const { data, error } = await supabase
     .from('students')

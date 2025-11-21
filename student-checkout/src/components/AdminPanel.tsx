@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
-import { addStudent, getClassesWithStudents, CheckoutService, type ClassGroup } from '../lib/checkout-service';
+import {
+  addStudent,
+  getClassesWithStudents,
+  CheckoutService,
+  updateStudentGender,
+  normalizeRosterGenders,
+  type ClassGroup
+} from '../lib/checkout-service';
 import { UserPlus, Upload } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import ActivityLog from './ActivityLog';
@@ -42,6 +49,9 @@ export default function AdminPanel() {
   const [classesLoading, setClassesLoading] = useState(true);
   const [expandedClass, setExpandedClass] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [genderUpdates, setGenderUpdates] = useState<Record<string, string>>({});
+  const [updatingGenderId, setUpdatingGenderId] = useState<string | null>(null);
+  const [normalizingGenders, setNormalizingGenders] = useState(false);
 
   useEffect(() => {
     loadClasses();
@@ -342,14 +352,37 @@ export default function AdminPanel() {
             <h3 className="text-lg font-semibold text-slate-800">System Controls</h3>
             <p className="text-sm text-slate-500">Bring every student back in instantly.</p>
           </div>
-          <button
-            type="button"
-            onClick={handleForceCheckIn}
-            disabled={resetting}
-            className="px-5 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
-          >
-            {resetting ? 'Checking everyone in…' : 'Force Check-In All'}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleForceCheckIn}
+              disabled={resetting}
+              className="px-5 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
+            >
+              {resetting ? 'Checking everyone in…' : 'Force Check-In All'}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!confirm('Normalize all stored gender values using the latest rules?')) return;
+                setNormalizingGenders(true);
+                try {
+                  const result = await normalizeRosterGenders();
+                  alert(`Normalization complete. ${result.updated} of ${result.total} students updated.`);
+                  await loadClasses();
+                } catch (error) {
+                  console.error('Failed to normalize roster genders', error);
+                  alert('Failed to normalize genders. See console for details.');
+                } finally {
+                  setNormalizingGenders(false);
+                }
+              }}
+              disabled={normalizingGenders}
+              className="px-5 py-3 bg-blue-50 text-blue-700 rounded-lg font-medium hover:bg-blue-100 disabled:bg-slate-200 disabled:text-slate-500"
+            >
+              {normalizingGenders ? 'Normalizing…' : 'Normalize Genders'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -394,17 +427,56 @@ export default function AdminPanel() {
 
                     {isExpanded && (
                       <div className="mt-3 space-y-2">
-                        {classGroup.students.map((student) => (
-                          <div
-                            key={student.id ?? student.email}
-                            className="bg-slate-50 rounded-lg px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div>
-                              <p className="font-medium text-slate-800">{student.name}</p>
-                              <p className="text-sm text-slate-500">{student.email}</p>
+                        {classGroup.students.map((student) => {
+                          const studentId = student.id ?? student.email;
+                          const pendingGender = genderUpdates[studentId] ?? student.gender ?? '';
+                          return (
+                            <div
+                              key={studentId}
+                              className="bg-slate-50 rounded-lg px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div>
+                                <p className="font-medium text-slate-800">{student.name}</p>
+                                <p className="text-sm text-slate-500">{student.email}</p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <select
+                                  value={pendingGender}
+                                  onChange={(e) =>
+                                    setGenderUpdates((prev) => ({ ...prev, [studentId]: e.target.value }))
+                                  }
+                                  className="border border-slate-300 rounded-lg px-2 py-1 text-sm"
+                                >
+                                  <option value="">Select gender</option>
+                                  <option value="Male">Male</option>
+                                  <option value="Female">Female</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  disabled={!genderUpdates[studentId] || updatingGenderId === studentId}
+                                  onClick={async () => {
+                                    const newGender = genderUpdates[studentId];
+                                    if (!newGender || !student.id) return;
+                                    setUpdatingGenderId(studentId);
+                                    try {
+                                      await updateStudentGender(student.id, newGender as 'Male' | 'Female');
+                                      setGenderUpdates((prev) => ({ ...prev, [studentId]: '' }));
+                                      await loadClasses();
+                                    } catch (error) {
+                                      console.error('Failed to update gender', error);
+                                      alert('Failed to update student gender.');
+                                    } finally {
+                                      setUpdatingGenderId(null);
+                                    }
+                                  }}
+                                  className="px-3 py-1 bg-blue-600 text-white rounded text-sm disabled:bg-slate-300 disabled:cursor-not-allowed"
+                                >
+                                  {updatingGenderId === studentId ? 'Saving…' : 'Save'}
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
