@@ -576,6 +576,50 @@ export async function normalizeRosterGenders(): Promise<{ updated: number; total
   return { updated, total: rows.length };
 }
 
+export async function deleteStudentsByIds(studentIds: string[]): Promise<number> {
+  if (!studentIds.length) return 0;
+  const { error, count } = await supabase
+    .from('students')
+    .delete({ count: 'exact' })
+    .in('id', studentIds);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function deleteClassRoster(className: string): Promise<number> {
+  const normalized = className?.trim();
+  if (!normalized) {
+    const { error, count } = await supabase
+      .from('students')
+      .delete({ count: 'exact' })
+      .or('class_name.is.null,class_name.eq.');
+    if (error) throw error;
+    return count ?? 0;
+  }
+
+  const isUnassigned = normalized.toLowerCase() === 'unassigned';
+  let query = supabase.from('students').delete({ count: 'exact' });
+
+  if (isUnassigned) {
+    query = query.or('class_name.is.null,class_name.eq.,class_name.ilike.unassigned');
+  } else {
+    query = query.eq('class_name', normalized);
+  }
+
+  const { error, count } = await query;
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function deleteAllClasses(): Promise<number> {
+  const { error, count } = await supabase
+    .from('students')
+    .delete({ count: 'exact' })
+    .not('id', 'is', null);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function getClassesWithStudents(): Promise<ClassGroup[]> {
   const { data, error } = await supabase
     .from('students')
@@ -670,6 +714,8 @@ export async function addStudent(
   if (gender) payload.gender = gender;
   if (className) payload.class_name = className;
 
-  const { error } = await supabase.from('students').insert(payload);
+  const { error } = await supabase
+    .from('students')
+    .upsert(payload, { onConflict: 'email' });
   if (error) throw error;
 }

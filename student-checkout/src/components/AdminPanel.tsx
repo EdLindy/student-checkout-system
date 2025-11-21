@@ -3,6 +3,9 @@ import {
   addStudent,
   getClassesWithStudents,
   CheckoutService,
+  deleteStudentsByIds,
+  deleteClassRoster,
+  deleteAllClasses,
   normalizeRosterGenders,
   normalizeGender,
   type ClassGroup
@@ -23,6 +26,10 @@ export default function AdminPanel() {
   const [expandedClass, setExpandedClass] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [normalizingGenders, setNormalizingGenders] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+  const [deletingStudents, setDeletingStudents] = useState(false);
+  const [deletingClassName, setDeletingClassName] = useState<string | null>(null);
+  const [clearingAllClasses, setClearingAllClasses] = useState(false);
 
   useEffect(() => {
     loadClasses();
@@ -33,10 +40,90 @@ export default function AdminPanel() {
     try {
       const data = await getClassesWithStudents();
       setClasses(data);
+      setSelectedStudentIds(new Set());
     } catch (error) {
       console.error('Error loading classes:', error);
     } finally {
       setClassesLoading(false);
+    }
+  }
+
+  const toggleStudentSelection = (studentId: string) => {
+    if (!studentId) return;
+    setSelectedStudentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentId)) {
+        next.delete(studentId);
+      } else {
+        next.add(studentId);
+      }
+      return next;
+    });
+  };
+
+  const applyClassSelection = (studentIds: string[], shouldSelect: boolean) => {
+    if (!studentIds.length) return;
+    setSelectedStudentIds((prev) => {
+      const next = new Set(prev);
+      studentIds.forEach((id) => {
+        if (!id) return;
+        if (shouldSelect) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      });
+      return next;
+    });
+  };
+
+  async function handleDeleteSelectedStudents(studentIds: string[]) {
+    if (!studentIds.length) return;
+    if (!confirm(`Delete ${studentIds.length} selected student${studentIds.length === 1 ? '' : 's'}?`)) return;
+    setDeletingStudents(true);
+    try {
+      const removed = await deleteStudentsByIds(studentIds);
+      alert(`${removed} student${removed === 1 ? '' : 's'} deleted.`);
+      const nextSelection = new Set(selectedStudentIds);
+      studentIds.forEach((id) => nextSelection.delete(id));
+      setSelectedStudentIds(nextSelection);
+      await loadClasses();
+    } catch (error) {
+      console.error('Failed to delete selected students', error);
+      alert('Failed to delete selected students.');
+    } finally {
+      setDeletingStudents(false);
+    }
+  }
+
+  async function handleDeleteClass(className: string) {
+    if (!className || !confirm(`Delete the entire roster for ${className}?`)) return;
+    setDeletingClassName(className);
+    try {
+      const removed = await deleteClassRoster(className);
+      alert(`${removed} student${removed === 1 ? '' : 's'} removed from ${className}.`);
+      await loadClasses();
+    } catch (error) {
+      console.error('Failed to delete class roster', error);
+      alert('Failed to delete class roster.');
+    } finally {
+      setDeletingClassName(null);
+    }
+  }
+
+  async function handleDeleteAllClasses() {
+    if (!classes.length) return;
+    if (!confirm('Delete all classes and students? This cannot be undone.')) return;
+    setClearingAllClasses(true);
+    try {
+      const removed = await deleteAllClasses();
+      alert(`${removed} student${removed === 1 ? '' : 's'} deleted across all classes.`);
+      await loadClasses();
+    } catch (error) {
+      console.error('Failed to delete all classes', error);
+      alert('Failed to delete all classes.');
+    } finally {
+      setClearingAllClasses(false);
     }
   }
 
@@ -442,6 +529,14 @@ export default function AdminPanel() {
             >
               {classesLoading ? 'Refreshing...' : 'Refresh'}
             </button>
+            <button
+              type="button"
+              onClick={handleDeleteAllClasses}
+              disabled={clearingAllClasses || classes.length === 0}
+              className="self-start sm:self-auto px-4 py-2 bg-red-50 text-red-700 rounded-lg font-medium hover:bg-red-100 disabled:bg-slate-200 disabled:text-slate-500"
+            >
+              {clearingAllClasses ? 'Deleting all…' : 'Delete All Classes'}
+            </button>
           </div>
 
           {classesLoading ? (
@@ -455,32 +550,93 @@ export default function AdminPanel() {
                 const isExpanded = expandedClass === label;
                 return (
                   <div key={label} className="py-3">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedClass(isExpanded ? null : label)}
-                      className="w-full flex items-center justify-between text-left"
-                    >
-                      <div>
-                        <p className="font-semibold text-slate-800">{label}</p>
-                        <p className="text-sm text-slate-500">{classGroup.students.length} {classGroup.students.length === 1 ? 'student' : 'students'}</p>
-                      </div>
-                      <span className="text-xl text-slate-500 font-mono">{isExpanded ? '-' : '+'}</span>
-                    </button>
+                    <div className="flex items-start justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedClass(isExpanded ? null : label)}
+                        className="flex-1 text-left"
+                      >
+                        <div>
+                          <p className="font-semibold text-slate-800">{label}</p>
+                          <p className="text-sm text-slate-500">{classGroup.students.length} {classGroup.students.length === 1 ? 'student' : 'students'}</p>
+                        </div>
+                        <span className="text-xl text-slate-500 font-mono">{isExpanded ? '-' : '+'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClass(label)}
+                        disabled={deletingClassName === label}
+                        className="px-3 py-1 text-sm bg-red-50 text-red-700 rounded hover:bg-red-100 disabled:bg-slate-200 disabled:text-slate-500"
+                      >
+                        {deletingClassName === label ? 'Deleting…' : 'Delete Class'}
+                      </button>
+                    </div>
 
                     {isExpanded && (
                       <div className="mt-3 space-y-2">
-                        {classGroup.students.map((student) => (
-                          <div
-                            key={student.id ?? student.email}
-                            className="bg-slate-50 rounded-lg px-4 py-3 flex flex-col gap-1"
-                          >
-                            <p className="font-medium text-slate-800">{student.name}</p>
-                            <p className="text-sm text-slate-500">{student.email}</p>
-                            <p className="text-xs uppercase tracking-wide text-slate-500">
-                              {student.gender ? `Gender: ${student.gender}` : 'Gender missing'}
-                            </p>
-                          </div>
-                        ))}
+                        {(() => {
+                          const selectableIds = classGroup.students
+                            .map((student) => student.id ?? '')
+                            .filter((id): id is string => Boolean(id));
+                          const selectedCount = selectableIds.filter((id) => selectedStudentIds.has(id)).length;
+                          return (
+                            <div className="mb-3 flex flex-wrap gap-2 items-center">
+                              <span className="text-sm text-slate-600">
+                                {selectedCount} selected
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => applyClassSelection(selectableIds, true)}
+                                disabled={!selectableIds.length}
+                                className="px-3 py-1 text-sm bg-slate-100 rounded hover:bg-slate-200 disabled:opacity-50"
+                              >
+                                Select All
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => applyClassSelection(selectableIds, false)}
+                                disabled={!selectedCount}
+                                className="px-3 py-1 text-sm bg-slate-100 rounded hover:bg-slate-200 disabled:opacity-50"
+                              >
+                                Clear Selection
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSelectedStudents(selectableIds.filter((id) => selectedStudentIds.has(id)))}
+                                disabled={!selectedCount || deletingStudents}
+                                className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-slate-300"
+                              >
+                                {deletingStudents ? 'Deleting…' : 'Delete Selected'}
+                              </button>
+                            </div>
+                          );
+                        })()}
+
+                        {classGroup.students.map((student) => {
+                          const studentId = student.id ?? '';
+                          const isSelected = studentId ? selectedStudentIds.has(studentId) : false;
+                          return (
+                            <label
+                              key={student.id ?? student.email}
+                              className="bg-slate-50 rounded-lg px-4 py-3 flex items-center gap-3 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                disabled={!studentId}
+                                checked={isSelected}
+                                onChange={() => toggleStudentSelection(studentId)}
+                                className="h-4 w-4 text-blue-600 border-slate-300 rounded"
+                              />
+                              <div>
+                                <p className="font-medium text-slate-800">{student.name}</p>
+                                <p className="text-sm text-slate-500">{student.email}</p>
+                                <p className="text-xs uppercase tracking-wide text-slate-500">
+                                  {student.gender ? `Gender: ${student.gender}` : 'Gender missing'}
+                                </p>
+                              </div>
+                            </label>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
