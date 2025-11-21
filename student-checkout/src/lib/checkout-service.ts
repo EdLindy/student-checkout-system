@@ -11,7 +11,7 @@ type CheckoutFinalizationContext = {
   destination?: { name?: string } | string | null;
 };
 
-type NormalizedGender = 'Male' | 'Female';
+export type NormalizedGender = 'Male' | 'Female';
 
 const FEMALE_KEYWORDS = ['female', 'females', 'girl', 'girls', 'lady', 'ladies', 'woman', 'women', 'f', 'g'];
 const MALE_KEYWORDS = ['male', 'males', 'boy', 'boys', 'man', 'men', 'gentleman', 'gentlemen', 'm', 'b'];
@@ -154,7 +154,11 @@ export class CheckoutService {
     return data || [];
   }
 
-  static async checkOut(email: string, destinationId: string): Promise<{ success: boolean; message: string }> {
+  static async checkOut(
+    email: string,
+    destinationId: string,
+    genderOverride?: NormalizedGender
+  ): Promise<{ success: boolean; message: string }> {
     const normalizedEmail = email.toLowerCase().trim();
 
     const { data: student, error: studentError } = await supabase
@@ -180,7 +184,15 @@ export class CheckoutService {
     await processAutoReturns();
 
     const className = student.class_name?.trim();
-    const normalizedGender = normalizeGender(student.gender);
+    let normalizedGender = genderOverride ?? normalizeGender(student.gender);
+
+    if (genderOverride && genderOverride !== student.gender) {
+      await supabase.from('students').update({ gender: genderOverride }).eq('id', student.id);
+      student.gender = genderOverride;
+    } else if (normalizedGender && student.gender !== normalizedGender) {
+      await supabase.from('students').update({ gender: normalizedGender }).eq('id', student.id);
+      student.gender = normalizedGender;
+    }
     if (className && normalizedGender) {
       try {
         const classAvailability = await getClassGenderAvailabilityForClass(className);

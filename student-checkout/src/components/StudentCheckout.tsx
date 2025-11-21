@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { CheckoutService } from '../lib/checkout-service';
+import { CheckoutService, normalizeGender, type NormalizedGender } from '../lib/checkout-service';
 import { supabase, type Destination, type GenderAvailability } from '../lib/supabase';
 import { RefreshCw } from 'lucide-react';
 
@@ -12,6 +12,8 @@ export function StudentCheckout() {
   const [message, setMessage] = useState<{ text: string; isSuccess: boolean } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [isCheckedOut, setIsCheckedOut] = useState(false);
+  const [selectedGender, setSelectedGender] = useState<NormalizedGender | ''>('');
+  const [genderLoading, setGenderLoading] = useState(false);
   const emailRef = useRef('');
   const lastWarningRef = useRef(0);
 
@@ -41,6 +43,7 @@ export function StudentCheckout() {
   useEffect(() => {
     emailRef.current = email;
     loadAvailability(email);
+    loadStudentProfile(email);
   }, [email]);
 
   useEffect(() => {
@@ -96,6 +99,27 @@ export function StudentCheckout() {
   const loadInitialData = async () => {
     await Promise.all([loadDestinations(), loadAvailability(emailRef.current)]);
   };
+  const loadStudentProfile = async (targetEmail?: string) => {
+    const normalized = targetEmail?.trim().toLowerCase();
+    if (!normalized) {
+      setSelectedGender('');
+      return;
+    }
+
+    setGenderLoading(true);
+    try {
+      const { data: student } = await supabase
+        .from('students')
+        .select('gender')
+        .eq('email', normalized)
+        .maybeSingle();
+      const normalizedGender = normalizeGender(student?.gender) ?? '';
+      setSelectedGender(normalizedGender);
+    } finally {
+      setGenderLoading(false);
+    }
+  };
+
 
   const loadDestinations = async () => {
     const { data } = await supabase
@@ -185,16 +209,22 @@ export function StudentCheckout() {
       return;
     }
 
+    if (!selectedGender) {
+      setMessage({ text: 'Select your gender before checking out.', isSuccess: false });
+      return;
+    }
+
     setLoading(true);
     setMessage(null);
 
-    const result = await CheckoutService.checkOut(email, destinationId);
+    const result = await CheckoutService.checkOut(email, destinationId, selectedGender);
     setMessage({ text: result.message, isSuccess: result.success });
 
     if (result.success) {
       setDestinationId('');
       localStorage.setItem('checkedOutEmail', email);
       await loadAvailability(email);
+      await loadStudentProfile(email);
       await checkIfStudentCheckedOut();
     }
 
@@ -218,6 +248,7 @@ export function StudentCheckout() {
       setEmail('');
       setIsCheckedOut(false);
       await loadAvailability(email);
+      await loadStudentProfile(email);
     }
 
     setLoading(false);
@@ -276,6 +307,39 @@ export function StudentCheckout() {
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           />
         </div>
+
+        {email.trim() && (
+          <div className="mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">Confirm Gender</p>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="gender"
+                  value="Male"
+                  checked={selectedGender === 'Male'}
+                  onChange={() => setSelectedGender('Male')}
+                  disabled={genderLoading}
+                />
+                Boy
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="radio"
+                  name="gender"
+                  value="Female"
+                  checked={selectedGender === 'Female'}
+                  onChange={() => setSelectedGender('Female')}
+                  disabled={genderLoading}
+                />
+                Girl
+              </label>
+            </div>
+            <p className="text-xs text-slate-500 mt-2">
+              This ensures only one boy and one girl from your class are out at a time.
+            </p>
+          </div>
+        )}
 
         <div className="mb-6">
           <label htmlFor="destination" className="block text-sm font-medium text-gray-700 mb-2">
