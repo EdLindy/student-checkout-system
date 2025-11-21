@@ -313,22 +313,6 @@ export function StudentCheckout() {
           />
         </div>
 
-        {email.trim() && (
-          <div className="mb-4">
-            <p className="text-sm font-medium text-gray-700 mb-1">Roster Gender</p>
-            <div className="px-4 py-2 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-700">
-              {rosterGenderLoading
-                ? 'Looking up your roster information…'
-                : rosterGender
-                  ? `${rosterGender === 'Male' ? 'Boys' : 'Girls'} roster`
-                  : 'We could not find your roster gender. Please contact your teacher.'}
-            </div>
-            <p className="text-xs text-slate-500 mt-2">
-              We automatically verify this against the class roster you were added from.
-            </p>
-          </div>
-        )}
-
         <div className="mb-6">
           <label htmlFor="destination" className="block text-sm font-medium text-gray-700 mb-2">
             Destination
