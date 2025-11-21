@@ -39,25 +39,34 @@ async function finalizeCheckoutRecord(
     ? context.destination
     : context.destination?.name ?? null;
 
-  await supabase.from('checkout_log').insert({
-    student_id: context.student.id,
-    student_name: context.student.name,
-    student_email: context.student.email,
-    student_gender: context.student.gender,
-    class_name: context.student.class_name,
-    destination_name: destinationName,
-    action,
-    checkout_time: context.checkout_time,
-    checkin_time: checkinTime.toISOString(),
-    duration_minutes: durationMinutes
-  });
-
-  await supabase
+  const { data: updatedRows, error: updateError } = await supabase
     .from('checkout_log')
-    .delete()
+    .update({
+      action,
+      checkin_time: checkinTime.toISOString(),
+      duration_minutes: durationMinutes
+    })
     .eq('student_id', context.student.id)
     .eq('checkout_time', context.checkout_time)
-    .eq('action', 'OUT');
+    .eq('action', 'OUT')
+    .select('id');
+
+  if (updateError) throw updateError;
+
+  if (!updatedRows || updatedRows.length === 0) {
+    await supabase.from('checkout_log').insert({
+      student_id: context.student.id,
+      student_name: context.student.name,
+      student_email: context.student.email,
+      student_gender: context.student.gender,
+      class_name: context.student.class_name,
+      destination_name: destinationName,
+      action,
+      checkout_time: context.checkout_time,
+      checkin_time: checkinTime.toISOString(),
+      duration_minutes: durationMinutes
+    });
+  }
 
   await supabase.from('current_checkouts').delete().eq('id', context.id);
 

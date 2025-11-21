@@ -26,29 +26,37 @@ async function finalizeCheckout(supabase, checkout, action = 'AUTO') {
     ? checkout.destination
     : checkout.destination?.name ?? null;
 
-  const logInsert = await supabase.from('checkout_log').insert({
-    student_id: checkout.student.id,
-    student_name: checkout.student.name,
-    student_email: checkout.student.email,
-    student_gender: checkout.student.gender,
-    class_name: checkout.student.class_name,
-    destination_name: destinationName,
-    action,
-    checkout_time: checkout.checkout_time,
-    checkin_time: checkinTime.toISOString(),
-    duration_minutes: durationMinutes
-  });
-
-  if (logInsert.error) throw logInsert.error;
-
-  const deleteOut = await supabase
+  const logUpdate = await supabase
     .from('checkout_log')
-    .delete()
+    .update({
+      action,
+      checkin_time: checkinTime.toISOString(),
+      duration_minutes: durationMinutes
+    })
     .eq('student_id', checkout.student.id)
     .eq('checkout_time', checkout.checkout_time)
-    .eq('action', 'OUT');
+    .eq('action', 'OUT')
+    .select('id');
 
-  if (deleteOut.error) throw deleteOut.error;
+  if (logUpdate.error) throw logUpdate.error;
+
+  const updatedCount = logUpdate.data?.length ?? 0;
+  if (updatedCount === 0) {
+    const logInsert = await supabase.from('checkout_log').insert({
+      student_id: checkout.student.id,
+      student_name: checkout.student.name,
+      student_email: checkout.student.email,
+      student_gender: checkout.student.gender,
+      class_name: checkout.student.class_name,
+      destination_name: destinationName,
+      action,
+      checkout_time: checkout.checkout_time,
+      checkin_time: checkinTime.toISOString(),
+      duration_minutes: durationMinutes
+    });
+
+    if (logInsert.error) throw logInsert.error;
+  }
 
   const deleteCheckout = await supabase
     .from('current_checkouts')
