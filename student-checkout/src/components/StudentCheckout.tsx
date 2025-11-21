@@ -22,7 +22,7 @@ export function StudentCheckout() {
     const channel = supabase
       .channel('checkout-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'current_checkouts' }, () => {
-        loadAvailability();
+        loadAvailability(emailRef.current);
         checkIfStudentCheckedOut();
       })
       .subscribe();
@@ -246,14 +246,14 @@ export function StudentCheckout() {
             availability.male
               ? 'bg-green-50 text-green-700 border-green-300'
               : 'bg-red-50 text-red-700 border-red-300'
-          }`}>
+          } ${availability.male ? '' : 'blink-red'}`}>
             Boys: {availability.male ? 'Available' : 'Unavailable'}
           </div>
           <div className={`px-6 py-3 rounded-full font-semibold text-sm border-2 ${
             availability.female
               ? 'bg-green-50 text-green-700 border-green-300'
               : 'bg-red-50 text-red-700 border-red-300'
-          }`}>
+          } ${availability.female ? '' : 'blink-red'}`}>
             Girls: {availability.female ? 'Available' : 'Unavailable'}
           </div>
         </div>

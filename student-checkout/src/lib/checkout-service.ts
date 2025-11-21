@@ -64,7 +64,7 @@ async function finalizeCheckoutRecord(
   return durationMinutes;
 }
 
-function normalizeGender(value?: string | null): NormalizedGender | null {
+export function normalizeGender(value?: string | null): NormalizedGender | null {
   if (!value) return null;
   const cleaned = value
     .toString()
